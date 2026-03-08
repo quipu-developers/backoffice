@@ -1,33 +1,59 @@
-# 🔍 QUIPU 지원자 관리 백오피스
+# QUIPU Backoffice
 
-<div align="center">
-  <img src="https://github.com/user-attachments/assets/c294ccd7-98be-4e77-a1cf-875bb5c4265e" width="45%" />
-  <img src="https://github.com/user-attachments/assets/ae8da484-c9ca-479d-91db-c3fb1cec54b9" width="45%" />
-</div>
+서울시립대학교 컴퓨터 학술 중앙동아리 QUIPU의 지원자 관리 백오피스 프로젝트입니다.  
+메인 웹 지원 폼으로 수집된 데이터를 운영진이 조회하고 관리할 수 있도록 제공합니다.
 
-서울시립대학교 **컴퓨터 학술 중앙동아리 QUIPU**의 **지원자 정보 실시간 동기화 백오피스**입니다.  
-QUIPU 메인 웹의 지원 폼을 통해 제출된 정보를 실시간으로 불러와 효율적인 관리가 가능합니다.
+## Table of Contents
 
-## 🌟 주요 기능
+- [Overview](#overview)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Development Timeline](#development-timeline)
+- [Getting Started](#getting-started)
 
-- 지원자 정보 **실시간 동기화** (이름, 학번, 모집 동기, 포트폴리오 PDF 등)
-- **단축키 지원** (특정 내용 복사, 모달 컨트롤)
-  - 화살표 키 (위/아래): 목록에서 항목을 선택하여 탐색할 수 있습니다.
-  - Enter 키: 선택된 항목에 대한 세부 정보 모달을 엽니다.
-  - 화살표 키 (왼쪽/오른쪽): 현재 모달에서 다음 또는 이전 항목의 모달로 이동합니다.
-  - Esc 키: 현재 열린 모달을 닫습니다.
-  - 밑줄이 있는 항목 클릭: 해당 항목의 텍스트가 클립보드에 복사됩니다.
-  - P 키: 모달 내에서 전화번호가 표시된 항목의 전화번호가 클립보드에 복사됩니다.
-- PDF 제목 클릭 시 **파일 다운로드** 요청
-- 지원자 데이터를 **Excel 파일로 다운로드**
+## Overview
 
-## 🛠 기술 스택
+본 프로젝트는 지원자 정보 검토와 운영 업무 효율화를 위한 내부 관리 도구입니다.  
+프론트엔드는 React 기반 관리자 화면으로 구성되며, 백엔드는 Express API 서버로 동작합니다.  
+운영진은 목록 조회, 상세 확인, 파일 다운로드, 데이터 내보내기 기능을 통해 지원 정보를 체계적으로 관리할 수 있습니다.
 
-- **프론트엔드**: React
-- **백엔드**: Express, MySQL
+## Features
 
-## 📅 개발 일정
+- 지원자 목록 및 상세 정보 조회
+- 키보드 단축키 기반 빠른 탐색 및 모달 제어
+- 포트폴리오 PDF 다운로드
+- 지원 데이터 Excel 내보내기
+- 관리자 인증 기반 접근 제어
 
-| 프로젝트    | 개발 기간         |
-| ----------- | ----------------- |
-| 백오피스 웹 | 2024.07 - 2024.08 |
+## Tech Stack
+
+- Frontend: React
+- Backend: Express
+- Database: MySQL
+
+## Development Timeline
+
+| Project | Period |
+|---|---|
+| Backoffice Web | 2024.07 - 2024.08 |
+
+## Getting Started
+
+### Install
+
+```bash
+cd frontend && npm install
+cd ../backend && npm install
+```
+
+### Run
+
+```bash
+# backend
+cd backend
+npm start
+
+# frontend
+cd ../frontend
+npm start
+```
