@@ -3,7 +3,6 @@ const app = express();
 const morgan = require("morgan");
 const winston = require("winston");
 
-//보안
 const cookieParser = require("cookie-parser");
 const path = require("path");
 const session = require("express-session");
@@ -20,7 +19,7 @@ const PORT = process.env.PORT;
 const passportConfig = require("../src/passport");
 passportConfig();
 
-const { sequelize } = require("../src/models");
+const { connectDB } = require("../src/models");
 const loginRouter = require("../src/routes/login");
 const memberRouter = require("../src/routes/member");
 const seminaRouter = require("../src/routes/semina");
@@ -33,26 +32,26 @@ const sessionOption = {
   saveUninitialized: false,
   secret: process.env.COOKIE_SECRET,
   cookie: {
-    maxAge: 1000 * 60 * 60 * 2, // 2시간
-    httpOnly: isProdOrTest, // production 또는 test이면 true
-    secure: isProdOrTest, // production 또는 test이면 true
-    ...(isProdOrTest && { sameSite: "None" }), // production 또는 test이면 추가
+    maxAge: 1000 * 60 * 60 * 2,
+    httpOnly: isProdOrTest,
+    secure: isProdOrTest,
+    ...(isProdOrTest && { sameSite: "None" }),
   },
-  ...(isProdOrTest && { proxy: true }), // production 또는 test이면 추가
+  ...(isProdOrTest && { proxy: true }),
 };
 
 app.use(cookieParser(process.env.COOKIE_SECRET));
 app.use(session(sessionOption));
-app.use(passport.initialize()); // req.user, req.login, req.isAuthenticate, req.logout
-app.use(passport.session()); //connect.sid라는 이름으로 세션 쿠키가 브라우져로 전송
+app.use(passport.initialize());
+app.use(passport.session());
 app.use(express.json());
 
 if (process.env.NODE_ENV === "development") {
   app.use(
     cors({
-      origin: process.env.CLIENT_ORIGIN_DEV, // 클라이언트의 Origin
+      origin: process.env.CLIENT_ORIGIN_DEV,
       methods: ["GET", "POST", "OPTIONS", "DELETE", "PATCH"],
-      credentials: true, // 쿠키를 포함한 요청을 허용}));
+      credentials: true,
     })
   );
   app.use(morgan("dev"));
@@ -60,9 +59,9 @@ if (process.env.NODE_ENV === "development") {
 } else {
   app.use(
     cors({
-      origin: process.env.CLIENT_ORIGIN, // 클라이언트의 Origin
+      origin: process.env.CLIENT_ORIGIN,
       methods: ["GET", "POST", "PATCH", "OPTIONS"],
-      credentials: true, // 쿠키를 포함한 요청을 허용}));
+      credentials: true,
     })
   );
   app.enable("trust proxy");
@@ -72,10 +71,10 @@ if (process.env.NODE_ENV === "development") {
   app.use(
     helmet.contentSecurityPolicy({
       directives: {
-        defaultSrc: ["'none'"], // 기본적으로 모든 리소스 차단
-        scriptSrc: ["'none'"], // JavaScript 실행 차단 (XSS 방지)
-        styleSrc: ["'none'"], // 외부 스타일 차단
-        frameSrc: ["'none'"], // iframe 포함 금지 (Clickjacking 방어)
+        defaultSrc: ["'none'"],
+        scriptSrc: ["'none'"],
+        styleSrc: ["'none'"],
+        frameSrc: ["'none'"],
       },
     })
   );
@@ -86,31 +85,14 @@ if (process.env.NODE_ENV === "development") {
   app.use(helmet.referrerPolicy({ policy: "strict-origin-when-cross-origin" }));
 }
 
-// swagger 관련 세팅
 const swaggerUi = require("swagger-ui-express");
 const swaggerDocument = require("./swagger.json");
 
 async function startServer() {
   try {
-    // Sequelize 연결
-    await sequelize.authenticate();
-    console.log("[LOG] DB 연결 성공");
+    await connectDB();
+    console.log("[LOG] MongoDB 연결 성공");
 
-    // Sequelize 테이블 동기화
-    await sequelize.sync();
-    console.log("[LOG] DB 연결 성공");
-
-    // 주기적으로 DB 연결 유지
-    setInterval(async () => {
-      try {
-        await sequelize.query("SELECT 1");
-        console.log("[LOG] DB 연결 유지 로직 작동");
-      } catch (err) {
-        console.error("[ERROR] DB 연결 체크/유지 실패: ", err);
-      }
-    }, 3600000);
-
-    // 서버 실행
     app.listen(PORT, () => {
       console.log(`PORT: ${PORT}`);
       console.log(`swagger: http://localhost:${PORT}/api-docs`);
@@ -124,24 +106,15 @@ async function startServer() {
 
 startServer();
 
-//login
 app.use("/bo/auth", loginRouter);
-
-//member
 app.use("/bo/member", memberRouter);
-
-//semina
 app.use("/bo/semina", seminaRouter);
-
-//feature
 app.use("/bo/feature", featureRouter);
 
-//{url}/api-docs 개발시에만
 if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 }
 
-//error handler
 const logger = winston.createLogger({
   level: "error",
   format: winston.format.json(),
@@ -153,7 +126,7 @@ app.use((err, req, res, next) => {
     console.log("[ERROR] error handler 동작");
     console.error(err.stack || err);
   } else {
-    logger.error(err.message || "Unexpected error"); // 운영 환경에서는 로그 파일에 저장
+    logger.error(err.message || "Unexpected error");
   }
 
   res.status(err.status || 500).json({

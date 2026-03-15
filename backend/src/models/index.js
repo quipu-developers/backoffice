@@ -1,41 +1,27 @@
-const Sequelize = require('sequelize');
-const fs = require('fs');
-const path = require('path');
-require("dotenv").config({
-    path: path.resolve(__dirname, "../.env")
-});
-// const config = require(__dirname +
-// '/../config/config.json')[process.env.NODE_ENV];
-const config = require(__dirname + '/../config/config');
+const mongoose = require("mongoose");
+const config = require("../config/config");
 
-const sequelize = new Sequelize(
-    config.database,
-    config.username,
-    config.password,
-    config
-);
-const db = {};
-db.sequelize = sequelize;
-const basename = path.basename(__filename);
-fs
-    .readdirSync(__dirname) // 현재 폴더의 모든 파일을 조회
-    .filter(file => { // 숨김 파일, index.js, js 확장자가 아닌 파일 필터링
-        return (file.indexOf('.') !== 0) && (file !== basename) && (
-            file.slice(-3) === '.js'
-        );
-    })
-    .forEach(file => { // 해당 파일의 모델 불러와서 init
-        const model = require(path.join(__dirname, file));
-        console.log(`[LOG] Sequelize: model ${model.name} init`);
-        db[model.name] = model;
-        model.initiate(sequelize);
-    });
-Object
-    .keys(db)
-    .forEach(modelName => { // associate 호출
-        if (db[modelName].associate) {
-            db[modelName].associate(db);
-        }
-    });
+const Member = require("./Member");
+const Semina = require("./Semina");
+const File = require("./File");
+const Feature = require("./Feature");
 
-module.exports = db;
+async function connectDB() {
+  if (!config?.mongodbUri) {
+    throw new Error("MONGODB_URI(또는 환경별 URI)가 설정되지 않았습니다.");
+  }
+
+  await mongoose.connect(config.mongodbUri, {
+    dbName: config.dbName || undefined,
+    serverSelectionTimeoutMS: 10000,
+  });
+}
+
+module.exports = {
+  mongoose,
+  connectDB,
+  Member,
+  Semina,
+  File,
+  Feature,
+};
