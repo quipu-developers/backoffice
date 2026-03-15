@@ -125,6 +125,8 @@ app.use("/bo/auth", loginRouter);
 app.use("/bo/member", memberRouter);
 app.use("/bo/semina", seminaRouter);
 app.use("/bo/feature", featureRouter);
+// 하위호환: 구버전 프론트가 /feature/* 를 호출하는 경우 지원
+app.use("/feature", featureRouter);
 
 if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
