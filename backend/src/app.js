@@ -26,21 +26,28 @@ const seminaRouter = require("../src/routes/semina");
 const featureRouter = require("../src/routes/feature");
 
 const isProdOrTest = NODE_ENV === "production" || NODE_ENV === "test";
+const PORT_NUMBER = Number(PORT) || 3001;
+
+const SESSION_SECRET = process.env.COOKIE_SECRET;
+if (!SESSION_SECRET && isProdOrTest) {
+  throw new Error("COOKIE_SECRET 환경변수가 필요합니다.");
+}
+const safeSessionSecret = SESSION_SECRET || "dev-only-cookie-secret";
 
 const sessionOption = {
   resave: false,
   saveUninitialized: false,
-  secret: process.env.COOKIE_SECRET,
+  secret: safeSessionSecret,
   cookie: {
     maxAge: 1000 * 60 * 60 * 2,
-    httpOnly: isProdOrTest,
+    httpOnly: true,
     secure: isProdOrTest,
     ...(isProdOrTest && { sameSite: "None" }),
   },
   ...(isProdOrTest && { proxy: true }),
 };
 
-app.use(cookieParser(process.env.COOKIE_SECRET));
+app.use(cookieParser(safeSessionSecret));
 app.use(session(sessionOption));
 app.use(passport.initialize());
 app.use(passport.session());
@@ -93,10 +100,10 @@ async function startServer() {
     await connectDB();
     console.log("[LOG] MongoDB 연결 성공");
 
-    app.listen(PORT, () => {
-      console.log(`PORT: ${PORT}`);
-      console.log(`swagger: http://localhost:${PORT}/api-docs`);
-      console.log(`server: http://localhost:${PORT}`);
+    app.listen(PORT_NUMBER, () => {
+      console.log(`PORT: ${PORT_NUMBER}`);
+      console.log(`swagger: http://localhost:${PORT_NUMBER}/api-docs`);
+      console.log(`server: http://localhost:${PORT_NUMBER}`);
     });
   } catch (err) {
     console.error("DB 연결 실패:", err);
@@ -105,6 +112,14 @@ async function startServer() {
 }
 
 startServer();
+
+app.get("/", (req, res) => {
+  res.status(200).json({ message: "backoffice backend is running" });
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
 
 app.use("/bo/auth", loginRouter);
 app.use("/bo/member", memberRouter);
