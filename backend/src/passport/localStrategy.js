@@ -18,7 +18,14 @@ module.exports = () => {
             if (!process.env.PASSWORD) {
                 throw new Error('NO process.env.PASSWORD');
             }
-            const result = await bcrypt.compare(password, process.env.PASSWORD)
+
+            const rawHash = String(process.env.PASSWORD).trim();
+            const normalizedHash = rawHash
+                .replace(/^"|"$/g, '')
+                .replace(/^'|'$/g, '')
+                .replace(/^\$2y\$/, '$2b$');
+
+            const result = await bcrypt.compare(String(password), normalizedHash);
             if (result) {
                 done(null, {username: 'admin'}); //user.username = 'admin'
             } else {
