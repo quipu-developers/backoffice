@@ -3,37 +3,21 @@ require("dotenv").config({
   path: path.resolve(__dirname, "../../.env"),
 });
 
+const env = process.env.NODE_ENV || "development";
+
 const config = {
   development: {
-    username: process.env.DEV_DB_USER,
-    password: process.env.DEV_DB_PASSWORD,
-    database: process.env.DEV_DB_NAME,
-    host: process.env.DEV_DB_HOST,
-    dialect: "mysql",
-    port: process.env.DEV_DB_PORT || 3306,
-    logging: false,
+    mongodbUri: process.env.DEV_MONGODB_URI || process.env.MONGODB_URI,
+    dbName: process.env.DEV_MONGODB_DB_NAME || process.env.MONGODB_DB_NAME,
   },
   test: {
-    username: process.env.TEST_DB_USER,
-    password: process.env.TEST_DB_PASSWORD,
-    database: process.env.TEST_DB_NAME,
-    host: process.env.TEST_DB_HOST,
-    dialect: "mysql",
-    port: process.env.TEST_DB_PORT || 3306,
-    logging: false,
+    mongodbUri: process.env.TEST_MONGODB_URI || process.env.MONGODB_URI,
+    dbName: process.env.TEST_MONGODB_DB_NAME || process.env.MONGODB_DB_NAME,
   },
   production: {
-    username: process.env.PROD_DB_USER,
-    password: process.env.PROD_DB_PASSWORD,
-    database: process.env.PROD_DB_NAME,
-    host: process.env.PROD_DB_HOST,
-    dialect: "mysql",
-    port: process.env.PROD_DB_PORT || 3306,
-    logging: false,
+    mongodbUri: process.env.PROD_MONGODB_URI || process.env.MONGODB_URI,
+    dbName: process.env.PROD_MONGODB_DB_NAME || process.env.MONGODB_DB_NAME,
   },
 };
 
-// ✅ 현재 NODE_ENV 값에 따라 설정 선택
-const currentConfig = config[process.env.NODE_ENV];
-
-module.exports = currentConfig;
+module.exports = config[env];

@@ -1,26 +1,20 @@
 const getData = (model) => async (req, res) => {
-    try {
-        const data = await model.findAll({
-            attributes: {
-                exclude: ['id']
-            }
-        });
+  try {
+    const data = await model.find({}).lean();
 
-        // 인덱스 추가 (1부터 시작)
-        const indexedData = data.map((item, index) => ({
-            index: index + 1,
-            ...item.toJSON()
-        }));
+    const indexedData = data.map((item, index) => {
+      const { _id, ...rest } = item;
+      return {
+        index: index + 1,
+        ...rest,
+      };
+    });
 
-        res
-            .status(200)
-            .json(indexedData);
-    } catch (err) {
-        console.log(err);
-        res
-            .status(500)
-            .send('Server Error');
-    }
+    res.status(200).json(indexedData);
+  } catch (err) {
+    console.log(err);
+    res.status(500).send("Server Error");
+  }
 };
 
 module.exports = getData;
