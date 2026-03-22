@@ -4,7 +4,7 @@
 
 - 이 Appendix는 기술 구현 기준 문서다.
 - 기존 [01-bo-auth.md](./01-bo-auth.md)의 기술 상세(데이터 모델, 인증/토큰, 권한 검사, 인덱스, 에러 코드)는 이 Appendix 기준으로 대체한다.
-- PM 의사결정/일정/리스크는 [01-bo-auth-plan.md](./01-bo-auth-plan.md)를 기준으로 본다.
+- PM 의사결정/일정/리스크는 [01-bo-auth-plan.md](./01-bo-auth.md)를 기준으로 본다.
 
 ## A) 목표 아키텍처 요약
 
@@ -538,7 +538,7 @@ Safari silent refresh QA(Phase 1 필수):
 
 ```json
 {
-  "id": "664f3f2a0d8e8b7d4a12c901",
+  "id": "1234567890abcde",
   "email": "admin@uos.ac.kr",
   "name": "홍길동",
   "isSuperAdmin": false,
