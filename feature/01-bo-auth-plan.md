@@ -1,4 +1,4 @@
-# 01. BO Auth 실행 명세서
+# 01. BO Auth 실행 명세서 (PM용)
 
 ## Executive Summary
 
@@ -9,7 +9,7 @@
 
 ## 0) 문서 목적
 
-본 문서는 백오피스 인증/권한 체계 고도화의 실행 계획이다.  
+본 문서는 백오피스 인증/권한 체계 고도화의 PM 의사결정용 실행 계획이다.  
 기술 구현 세부는 별도 Appendix 문서로 분리한다.
 
 - 기술 Appendix: [01-bo-auth-appendix.md](./01-bo-auth-appendix.md)
@@ -29,6 +29,12 @@
 - 권한 확장 시 기술 부채가 누적된다.
 - 계정/보안 운영 비용이 계속 증가한다.
 
+## 3) Scope (2주)
+
+전체 담당:
+
+- 백엔드/프론트: 엄준식
+
 ### Phase 1 (3/24~3/27, 4일): 인증 전환
 
 - Google OAuth + Authorization 토큰 기반 로그인 전환
@@ -40,6 +46,7 @@
 - Safari 포함 주요 브라우저 로그인 성공
 - 인증 성공률 99% 이상 (QA + staging 로그 기준)
 - Safari 환경에서 access token 만료 후 refresh 기반 세션 복구(silent refresh) 성공
+- 로그인 상태 새로고침(F5) 및 신규 탭 보호 경로 직접 접근 시 `bootstrapAuth -> /auth/refresh -> /bo/auth/me` 세션 복구 흐름 성공
 - Safari cross-domain refresh 검증은 Appendix `P) 테스트 전략`의 QA 시나리오 기준으로 판정
 
 ### Phase 2 (3/28~4/2, 5일): 권한 모델 전환
@@ -96,6 +103,8 @@ Phase 1 시작 게이팅(필수, Day 1 전 완료):
 - FE/BE 도메인/CORS/TLS 확정
 - Safari 대응 인증 경로 확정: Option A(리버스 프록시 기반 same-site 정렬) 적용
   - FE 도메인에서 `/api` 경로를 BE로 프록시해 refresh cookie를 same-site로 처리
+- fail-fast 환경변수 확정 및 주입:
+  - `COOKIE_SECRET`, `ACCESS_TOKEN_SECRET`, `BO_BACKEND_URL`, `BO_FRONTEND_URL`, `BO_ALLOWED_ORIGINS`, `MONGO_URI`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SERVER_SECRET_SALT`
 
 준비 권장 항목(병행 진행 가능):
 
@@ -167,7 +176,7 @@ Before/After:
   - Phase 2 지연 시 관리자 권한 변경 UI를 임시 제외하고, 슈퍼어드민 API/DB 운영 절차로 권한 변경을 대체해 기능 우선 배포
   - 개발자 이탈/병가 발생 시 즉시 백엔드/프론트 대체 담당자를 지정하고, Phase 1(인증 안정화) 범위 우선으로 축소 운영
 
-## 11) 수용 기준
+## 11) 수용 기준 (PM 관점)
 
 - 2주 마일스톤 내 Phase 1~3 완료
 - 인증/권한/운영 절차가 문서 기준으로 인수 가능
