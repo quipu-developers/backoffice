@@ -2,7 +2,7 @@ const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const multer = require ("multer");
 const dotenv = require("dotenv");
 const path = require("path");
-const { Semina, File } = require("../models");
+const { Semina, File } = require("../models/mongo");
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 // FE로부터 data셋이 들어옴. 
@@ -38,7 +38,7 @@ const uploadHandler = async (req, res) => {
       console.log("[LOG] JSON 데이터 확인:", req.body);
 
       const seminaRecord = await Semina.create({ speaker, topic, detail, resources, presentation_date });
-      console.log(`[LOG] Semina 데이터 저장 완료 (id: ${seminaRecord.semina_id}, speaker: ${seminaRecord.speaker}), topic: ${seminaRecord.topic}`);
+      console.log(`[LOG] Semina 데이터 저장 완료 (id: ${seminaRecord._id}, speaker: ${seminaRecord.speaker}), topic: ${seminaRecord.topic}`);
 
       // 파일 업로드 (Cloudflare R2)
       if (!req.files || req.files.length === 0) {
@@ -55,7 +55,7 @@ const uploadHandler = async (req, res) => {
 
       const uploadResults = await Promise.all(
         req.files.map(async (file, index) => {  //index 추가 (파일명만 변경)
-            const fileKey = `${formatDateToYYMMDD(seminaRecord.presentation_date)}-${seminaRecord.speaker}-${index + 1}${path.extname(file.originalname)}`; // 🎯 파일명에 index 추가
+            const fileKey = `${formatDateToYYMMDD(new Date(seminaRecord.presentation_date))}-${seminaRecord.speaker}-${index + 1}${path.extname(file.originalname)}`; // 🎯 파일명에 index 추가
             const params = {
                 Bucket: process.env.R2_BUCKET_NAME,
                 Key: fileKey,
@@ -74,7 +74,7 @@ const uploadHandler = async (req, res) => {
       const fileRecords = await Promise.all(
           uploadResults.map(async (file) => {
               return await File.create({
-                  semina_id: seminaRecord.semina_id, // Semina와 연결
+                  semina_id: seminaRecord._id, // Semina와 연결
                   file_name: file.filename,
               });
           })

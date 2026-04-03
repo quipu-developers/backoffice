@@ -1,0 +1,2918 @@
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/config/permissions.js =====
+const Permission = {
+  READ: 1 << 0,
+  WRITE_ACTIVITY: 1 << 1,
+  WRITE_RECRUIT_FORM: 1 << 2,
+  WRITE_CLUB_INFO: 1 << 3,
+};
+
+const WRITE_ALL_MASK =
+  Permission.WRITE_ACTIVITY |
+  Permission.WRITE_RECRUIT_FORM |
+  Permission.WRITE_CLUB_INFO;
+
+module.exports = { Permission, WRITE_ALL_MASK };
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/config/mongo.js =====
+const mongoose = require("mongoose");
+
+async function connectMongo() {
+  const uri = process.env.MONGO_URI;
+  if (!uri) throw new Error("MONGO_URI is required");
+
+  await mongoose.connect(uri, {
+    dbName: process.env.MONGO_DB_NAME || "quipu_backoffice",
+  });
+
+  console.log("[LOG] MongoDB connected");
+}
+
+module.exports = { connectMongo };
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/utils/cryptoUtil.js =====
+const crypto = require("crypto");
+
+function sha256(value) {
+  return crypto.createHash("sha256").update(String(value)).digest("hex");
+}
+
+function randomToken(bytes = 32) {
+  return crypto.randomBytes(bytes).toString("hex");
+}
+
+function hmacSha256(value, secret) {
+  return crypto.createHmac("sha256", secret).update(String(value)).digest("hex");
+}
+
+module.exports = { sha256, randomToken, hmacSha256 };
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/utils/permLabels.js =====
+const { Permission, WRITE_ALL_MASK } = require("../config/permissions");
+
+function permToLabels(perm) {
+  const labels = [];
+  if (perm & Permission.READ) labels.push("read/all");
+
+  const hasAllWrite = (perm & WRITE_ALL_MASK) === WRITE_ALL_MASK;
+  if (hasAllWrite) {
+    labels.push("write/all");
+    return labels;
+  }
+
+  if (perm & Permission.WRITE_ACTIVITY) labels.push("write/activity");
+  if (perm & Permission.WRITE_RECRUIT_FORM) labels.push("write/recruit-form");
+  if (perm & Permission.WRITE_CLUB_INFO) labels.push("write/club-info");
+
+  return labels;
+}
+
+function labelsToPerm(labels = []) {
+  let perm = 0;
+  if (labels.includes("read/all")) perm |= Permission.READ;
+  if (labels.includes("write/activity")) perm |= Permission.WRITE_ACTIVITY;
+  if (labels.includes("write/recruit-form")) perm |= Permission.WRITE_RECRUIT_FORM;
+  if (labels.includes("write/club-info")) perm |= Permission.WRITE_CLUB_INFO;
+  if (labels.includes("write/all")) perm |= WRITE_ALL_MASK;
+  if ((perm & Permission.READ) === 0) perm |= Permission.READ;
+  return perm;
+}
+
+module.exports = { permToLabels, labelsToPerm };
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/utils/ipHash.js =====
+const { hmacSha256 } = require("./cryptoUtil");
+
+function toIpHash(ip) {
+  const salt = process.env.SERVER_SECRET_SALT;
+  if (!salt) return null;
+  if (!ip) return null;
+  return hmacSha256(ip, salt);
+}
+
+module.exports = { toIpHash };
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/utils/tokenUtil.js =====
+const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+
+function signAccessToken(userId) {
+  return jwt.sign(
+    { sub: String(userId), jti: crypto.randomUUID() },
+    process.env.ACCESS_TOKEN_SECRET,
+    { expiresIn: "15m" }
+  );
+}
+
+function verifyAccessToken(token) {
+  return jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+}
+
+module.exports = { signAccessToken, verifyAccessToken };
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/models/mongo/Member.js =====
+const mongoose = require("mongoose");
+
+const memberSchema = new mongoose.Schema(
+  {
+    generation: { type: String },
+    username: { type: String },
+    student_id: { type: String },
+    major: { type: String },
+    email: { type: String },
+    activity: { type: Boolean },
+    dev: { type: Boolean },
+    game: { type: Boolean },
+    design: { type: Boolean },
+    blog: { type: String },
+    github: { type: String },
+    portfolio: { type: String },
+    etc: { type: String },
+  },
+  { timestamps: true, collection: "members" }
+);
+
+module.exports = mongoose.model("MemberMongo", memberSchema);
+
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/models/mongo/Feature.js =====
+const mongoose = require("mongoose");
+
+const featureSchema = new mongoose.Schema(
+  {
+    feature_name: { type: String, required: true, unique: true, trim: true },
+    is_enabled: { type: Boolean, default: false },
+  },
+  { timestamps: true, collection: "features" }
+);
+
+module.exports = mongoose.model("FeatureMongo", featureSchema);
+
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/models/mongo/Semina.js =====
+const mongoose = require("mongoose");
+
+const seminaSchema = new mongoose.Schema(
+  {
+    speaker: { type: String, required: true },
+    topic: { type: String, required: true },
+    detail: { type: String },
+    resources: { type: String },
+    presentation_date: { type: Date, required: true },
+  },
+  { timestamps: true, collection: "semina" }
+);
+
+module.exports = mongoose.model("SeminaMongo", seminaSchema);
+
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/models/mongo/File.js =====
+const mongoose = require("mongoose");
+
+const fileSchema = new mongoose.Schema(
+  {
+    semina_id: { type: mongoose.Schema.Types.ObjectId, required: true, ref: "SeminaMongo" },
+    file_name: { type: String, required: true },
+  },
+  { timestamps: true, collection: "files" }
+);
+
+module.exports = mongoose.model("FileMongo", fileSchema);
+
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/models/mongo/index.js =====
+const Member = require("./Member");
+const Feature = require("./Feature");
+const Semina = require("./Semina");
+const File = require("./File");
+
+module.exports = {
+  Member,
+  Feature,
+  Semina,
+  File,
+};
+
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/models/admin/AdminUser.js =====
+const mongoose = require("mongoose");
+const { Permission } = require("../../config/permissions");
+
+const adminUserSchema = new mongoose.Schema(
+  {
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    googleSub: { type: String, unique: true, sparse: true },
+    name: { type: String },
+    pictureUrl: { type: String },
+    perm: { type: Number, required: true, default: Permission.READ },
+    isSuperAdmin: { type: Boolean, default: false },
+    isActive: { type: Boolean, default: true },
+    lastLoginAt: { type: Date },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model("AdminUser", adminUserSchema);
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/models/admin/AdminInvite.js =====
+const mongoose = require("mongoose");
+const { Permission } = require("../../config/permissions");
+
+const adminInviteSchema = new mongoose.Schema(
+  {
+    email: { type: String, required: true, lowercase: true, trim: true },
+    perm: { type: Number, required: true, default: Permission.READ },
+    tokenHash: { type: String, required: true, unique: true },
+    expiresAt: { type: Date, required: true },
+    status: {
+      type: String,
+      enum: ["pending", "used", "expired", "revoked"],
+      default: "pending",
+    },
+    invitedBy: { type: mongoose.Schema.Types.ObjectId, required: true, ref: "AdminUser" },
+    usedByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "AdminUser" },
+  },
+  { timestamps: true }
+);
+
+adminInviteSchema.index({ email: 1, status: 1 });
+adminInviteSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+module.exports = mongoose.model("AdminInvite", adminInviteSchema);
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/models/admin/RefreshToken.js =====
+const mongoose = require("mongoose");
+
+const refreshTokenSchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: "AdminUser" },
+    tokenHash: { type: String, required: true, unique: true },
+    expiresAt: { type: Date, required: true },
+    revoked: { type: Boolean, default: false },
+    revokedAt: { type: Date },
+    replacedByTokenId: { type: mongoose.Schema.Types.ObjectId, ref: "RefreshToken" },
+    deviceInfo: {
+      userAgent: String,
+      os: String,
+      browser: String,
+      ipHash: String,
+      lastSeenAt: Date,
+    },
+  },
+  { timestamps: true }
+);
+
+refreshTokenSchema.index({ userId: 1, revoked: 1, revokedAt: 1 });
+refreshTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+module.exports = mongoose.model("RefreshToken", refreshTokenSchema);
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/models/admin/AdminAuditLog.js =====
+const mongoose = require("mongoose");
+
+const adminAuditLogSchema = new mongoose.Schema(
+  {
+    actorUserId: { type: mongoose.Schema.Types.ObjectId, ref: "AdminUser" },
+    targetUserId: { type: mongoose.Schema.Types.ObjectId, ref: "AdminUser" },
+    action: { type: String, required: true },
+    before: { type: mongoose.Schema.Types.Mixed },
+    after: { type: mongoose.Schema.Types.Mixed },
+    ipHash: { type: String },
+    userAgent: { type: String },
+  },
+  { timestamps: { createdAt: true, updatedAt: false } }
+);
+
+adminAuditLogSchema.index({ actorUserId: 1, createdAt: -1 });
+adminAuditLogSchema.index({ action: 1, createdAt: -1 });
+adminAuditLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 180 * 24 * 60 * 60 });
+
+function denyMutation(next) {
+  next(new Error("ADMIN_AUDIT_LOG_APPEND_ONLY"));
+}
+
+// Enforce append-only policy at model level.
+adminAuditLogSchema.pre("updateOne", denyMutation);
+adminAuditLogSchema.pre("updateMany", denyMutation);
+adminAuditLogSchema.pre("findOneAndUpdate", denyMutation);
+adminAuditLogSchema.pre("replaceOne", denyMutation);
+adminAuditLogSchema.pre("deleteOne", denyMutation);
+adminAuditLogSchema.pre("deleteMany", denyMutation);
+adminAuditLogSchema.pre("findOneAndDelete", denyMutation);
+adminAuditLogSchema.pre("findOneAndRemove", denyMutation);
+
+module.exports = mongoose.model("AdminAuditLog", adminAuditLogSchema);
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/models/admin/AuthCode.js =====
+const mongoose = require("mongoose");
+
+const authCodeSchema = new mongoose.Schema(
+  {
+    codeHash: { type: String, required: true, unique: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: "AdminUser" },
+    expiresAt: { type: Date, required: true },
+    usedAt: { type: Date, default: null },
+  },
+  { timestamps: true }
+);
+
+authCodeSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+module.exports = mongoose.model("AuthCode", authCodeSchema);
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/models/admin/index.js =====
+const AdminUser = require("./AdminUser");
+const AdminInvite = require("./AdminInvite");
+const RefreshToken = require("./RefreshToken");
+const AdminAuditLog = require("./AdminAuditLog");
+const AuthCode = require("./AuthCode");
+
+module.exports = {
+  AdminUser,
+  AdminInvite,
+  RefreshToken,
+  AdminAuditLog,
+  AuthCode,
+};
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/services/auditLogService.js =====
+const { AdminAuditLog } = require("../models/admin");
+const { toIpHash } = require("../utils/ipHash");
+
+async function writeAuditLog({
+  actorUserId,
+  targetUserId = null,
+  action,
+  before = null,
+  after = null,
+  req,
+  session = null,
+}) {
+  const ip =
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+    req.socket?.remoteAddress ||
+    "";
+  const ipHash = toIpHash(ip);
+
+  const payload = {
+    actorUserId,
+    targetUserId,
+    action,
+    before,
+    after,
+    ipHash,
+    userAgent: req.headers["user-agent"] || "",
+  };
+
+  if (session) {
+    await AdminAuditLog.create([payload], { session });
+    return;
+  }
+
+  await AdminAuditLog.create(payload);
+}
+
+module.exports = { writeAuditLog };
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/services/superAdminBootstrap.js =====
+const { AdminUser } = require("../models/admin");
+const { Permission, WRITE_ALL_MASK } = require("../config/permissions");
+
+async function bootstrapSuperAdmin() {
+  const email = (process.env.SUPER_ADMIN_EMAIL || "").trim().toLowerCase();
+  if (!email) return;
+
+  const superPerm = Permission.READ | WRITE_ALL_MASK;
+
+  let user = await AdminUser.findOne({ email });
+  if (!user) {
+    await AdminUser.create({
+      email,
+      perm: superPerm,
+      isSuperAdmin: true,
+      isActive: true,
+    });
+    console.log("[LOG] super admin bootstrapped");
+    return;
+  }
+
+  // Intentional bootstrap policy:
+  // SUPER_ADMIN_EMAIL is always enforced with max admin permissions.
+  // Manual perm downgrades are reverted on next server bootstrap.
+  const needsUpdate = !user.isSuperAdmin || user.perm !== superPerm;
+  if (needsUpdate) {
+    user.isSuperAdmin = true;
+    user.perm = superPerm;
+    await user.save();
+    console.log("[LOG] super admin elevated by bootstrap");
+  }
+}
+
+module.exports = { bootstrapSuperAdmin };
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/services/redisClient.js =====
+let redisClient = null;
+let warnedMissingModule = false;
+
+function getRedisClient() {
+  if (redisClient) return redisClient;
+
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) return null;
+
+  let Redis;
+  try {
+    // Optional dependency: production can enable Redis; dev can run without it.
+    ({ default: Redis } = require("ioredis"));
+  } catch (_e) {
+    if (!warnedMissingModule) {
+      warnedMissingModule = true;
+      console.warn("[WARN] REDIS_URL is set but ioredis is not installed. Falling back to in-memory mode.");
+    }
+    return null;
+  }
+
+  redisClient = new Redis(redisUrl, {
+    lazyConnect: true,
+    maxRetriesPerRequest: 1,
+    enableReadyCheck: true,
+  });
+
+  redisClient.on("error", (err) => {
+    console.error("[ERROR] Redis client error:", err?.message || err);
+  });
+
+  redisClient.connect().catch((err) => {
+    console.error("[ERROR] Redis connect failed:", err?.message || err);
+  });
+
+  return redisClient;
+}
+
+function getRedisMode() {
+  if (!process.env.REDIS_URL) return "in-memory";
+  const client = getRedisClient();
+  return client ? "redis" : "in-memory";
+}
+
+module.exports = { getRedisClient, getRedisMode };
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/services/rateLimiterFactory.js =====
+const rateLimit = require("express-rate-limit");
+const { getRedisClient } = require("./redisClient");
+
+let RedisStore = null;
+let warnedMissingStore = false;
+
+function getRedisStoreCtor() {
+  if (RedisStore) return RedisStore;
+  try {
+    ({ RedisStore } = require("rate-limit-redis"));
+    return RedisStore;
+  } catch (_e) {
+    if (!warnedMissingStore) {
+      warnedMissingStore = true;
+      console.warn(
+        "[WARN] rate-limit-redis is not installed. Falling back to in-memory rate limiter."
+      );
+    }
+    return null;
+  }
+}
+
+function createRateLimiter({
+  windowMs,
+  max,
+  keyGenerator,
+  code = "TOO_MANY_REQUESTS",
+  message = "Too Many Requests",
+}) {
+  const redis = getRedisClient();
+  const Ctor = redis ? getRedisStoreCtor() : null;
+
+  const base = {
+    windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator,
+    handler: (_req, res) => {
+      return res.status(429).json({ code, message });
+    },
+  };
+
+  if (!redis || !Ctor) return rateLimit(base);
+
+  return rateLimit({
+    ...base,
+    store: new Ctor({
+      sendCommand: (...args) => redis.call(...args),
+    }),
+  });
+}
+
+module.exports = { createRateLimiter };
+
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/passport/googleStrategy.js =====
+const passport = require("passport");
+const { Strategy: GoogleStrategy } = require("passport-google-oauth20");
+const mongoose = require("mongoose");
+const { AdminUser, AdminInvite } = require("../models/admin");
+const { Permission } = require("../config/permissions");
+const { sha256 } = require("../utils/cryptoUtil");
+const { writeAuditLog } = require("../services/auditLogService");
+
+async function verifyGoogleTokenClaims(accessToken) {
+  if (!accessToken) return false;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+  try {
+    const res = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`,
+      { signal: controller.signal }
+    );
+    if (!res.ok) return false;
+
+    const payload = await res.json();
+    const aud = payload.aud || payload.azp || payload.issued_to;
+    const iss = payload.iss || payload.issuer;
+    const validAud = aud === process.env.GOOGLE_CLIENT_ID;
+    const validIss =
+      !iss || iss === "accounts.google.com" || iss === "https://accounts.google.com";
+    return validAud && validIss;
+  } catch (_e) {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+module.exports = function configureGoogleStrategy() {
+  passport.use(
+    new GoogleStrategy(
+      {
+        clientID: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL: `${process.env.BO_BACKEND_URL}/bo/auth/google/callback`,
+        passReqToCallback: true,
+      },
+      async (req, accessToken, _refreshToken, profile, done) => {
+        const email = (profile.emails?.[0]?.value || "").trim().toLowerCase();
+        const emailVerified =
+          profile._json?.email_verified === true || profile.emails?.[0]?.verified === true;
+        const googleSub = profile.id;
+        const name = profile.displayName || "";
+        const pictureUrl = profile.photos?.[0]?.value || "";
+
+        try {
+          const oauthClaimsValid = await verifyGoogleTokenClaims(accessToken);
+          if (!oauthClaimsValid) return done(null, false, { message: "OAUTH_CLAIMS_INVALID" });
+          if (!emailVerified) return done(null, false, { message: "EMAIL_NOT_VERIFIED" });
+
+          let user = await AdminUser.findOne({ googleSub });
+          if (user) {
+            if (!user.isActive) return done(null, false, { message: "ACCOUNT_INACTIVE" });
+            user.lastLoginAt = new Date();
+            await user.save();
+            return done(null, user);
+          }
+
+          const inviteRawToken = req.signedCookies.bo_invite_token;
+          if (!inviteRawToken) return done(null, false, { message: "INVITE_REQUIRED" });
+          const inviteHash = sha256(inviteRawToken);
+
+          const invite = await AdminInvite.findOne({ tokenHash: inviteHash });
+          if (!invite) return done(null, false, { message: "INVITE_INVALID" });
+
+          if (invite.status === "used") return done(null, false, { message: "INVITE_ALREADY_USED" });
+          if (invite.status === "revoked") return done(null, false, { message: "INVITE_REVOKED" });
+          if (invite.status !== "pending") return done(null, false, { message: "INVITE_INVALID" });
+          if (invite.expiresAt < new Date()) return done(null, false, { message: "INVITE_EXPIRED" });
+          if (invite.email !== email) return done(null, false, { message: "INVITE_EMAIL_MISMATCH" });
+
+          const existingByEmail = await AdminUser.findOne({ email });
+          if (existingByEmail?.googleSub && existingByEmail.googleSub !== googleSub) {
+            return done(null, false, { message: "GOOGLE_SUB_CONFLICT" });
+          }
+
+          const session = await mongoose.startSession();
+          let createdUser;
+          try {
+            await session.withTransaction(async () => {
+              if (existingByEmail) {
+                existingByEmail.googleSub = googleSub;
+                existingByEmail.name = name;
+                existingByEmail.pictureUrl = pictureUrl;
+                existingByEmail.perm = invite.perm | Permission.READ;
+                existingByEmail.isActive = true;
+                existingByEmail.lastLoginAt = new Date();
+                await existingByEmail.save({ session });
+                createdUser = existingByEmail;
+              } else {
+                createdUser = await AdminUser.create(
+                  [
+                    {
+                      email,
+                      googleSub,
+                      name,
+                      pictureUrl,
+                      perm: invite.perm | Permission.READ,
+                      isActive: true,
+                      lastLoginAt: new Date(),
+                    },
+                  ],
+                  { session }
+                ).then((arr) => arr[0]);
+              }
+
+              invite.status = "used";
+              invite.usedByUserId = createdUser._id;
+              await invite.save({ session });
+
+              await writeAuditLog({
+                actorUserId: createdUser._id,
+                targetUserId: createdUser._id,
+                action: "ADMIN_INVITE_ACCEPTED",
+                after: {
+                  email,
+                  perm: createdUser.perm,
+                  inviteId: String(invite._id),
+                },
+                req,
+                session,
+              });
+            });
+          } finally {
+            await session.endSession();
+          }
+
+          return done(null, createdUser);
+        } catch (err) {
+          return done(err);
+        }
+      }
+    )
+  );
+};
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/passport/index.js =====
+const configureGoogleStrategy = require("./googleStrategy");
+
+module.exports = () => {
+  configureGoogleStrategy();
+};
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/middlewares/boAuth.js =====
+const { AdminUser } = require("../models/admin");
+const { verifyAccessToken } = require("../utils/tokenUtil");
+
+function extractBearer(req) {
+  const h = req.headers.authorization || "";
+  if (!h.startsWith("Bearer ")) return null;
+  return h.slice(7);
+}
+
+async function requireAuth(req, res, next) {
+  try {
+    const token = extractBearer(req);
+    if (!token) return res.status(401).json({ code: "UNAUTHORIZED" });
+
+    const payload = verifyAccessToken(token);
+    const user = await AdminUser.findById(payload.sub).lean();
+    if (!user) return res.status(401).json({ code: "UNAUTHORIZED" });
+    if (!user.isActive) return res.status(403).json({ code: "ACCOUNT_INACTIVE" });
+
+    req.auth = {
+      userId: String(user._id),
+      perm: user.perm,
+      isSuperAdmin: user.isSuperAdmin,
+    };
+
+    next();
+  } catch (_e) {
+    return res.status(401).json({ code: "UNAUTHORIZED" });
+  }
+}
+
+function requirePerm(mask) {
+  return (req, res, next) => {
+    if ((req.auth.perm & mask) === mask) return next();
+    return res.status(403).json({ code: "PERMISSION_DENIED" });
+  };
+}
+
+function requireSuperAdmin(req, res, next) {
+  if (req.auth.isSuperAdmin) return next();
+  return res.status(403).json({ code: "SUPER_ADMIN_REQUIRED" });
+}
+
+module.exports = { requireAuth, requirePerm, requireSuperAdmin };
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/controllers/getdata.js =====
+const getData = (model) => async (req, res) => {
+    try {
+        const data = await model.find({}).lean();
+        const rows = data.map(({ _id, __v, ...rest }) => rest);
+
+        const indexedData = rows.map((item, index) => ({
+            index: index + 1,
+            ...item
+        }));
+
+        res
+            .status(200)
+            .json(indexedData);
+    } catch (err) {
+        console.log(err);
+        res
+            .status(500)
+            .send('Server Error');
+    }
+};
+
+module.exports = getData;
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/controllers/recruit.js =====
+const { Feature } = require("../models/mongo");
+
+const checkRecruit = async (req, res) => {
+  try {
+    const recruit = await Feature.findOne({ feature_name: "recruit" }).lean();
+    if (!recruit) {
+      return res
+        .status(404)
+        .json({ message: "해당 feature를 찾을 수 없습니다." });
+    }
+
+    return res.status(200).json({ is_enabled: recruit.is_enabled });
+  } catch (err) {
+    console.error("[ERROR] checkRecruit 실행 중 오류 발생:", err);
+    return res.status(500).json({ message: "서버 오류 발생" });
+  }
+};
+
+const changeRecruit = async (req, res) => {
+  try {
+    const recruit = await Feature.findOne({ feature_name: "recruit" });
+    if (!recruit) {
+      return res
+        .status(404)
+        .json({ message: "해당 feature를 찾을 수 없습니다." });
+    }
+
+    recruit.is_enabled = !recruit.is_enabled;
+    await recruit.save();
+
+    res.status(200).json({
+      message: "recruit 상태가 변경.",
+      is_enabled: recruit.is_enabled,
+    });
+  } catch (err) {
+    console.error("[ERROR] changeRecruit 실행 중 오류 발생:", err);
+    return res.status(500).json({ message: "서버 오류 발생" });
+  }
+};
+
+module.exports = {
+  checkRecruit,
+  changeRecruit,
+};
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/controllers/uploadtoR2.js =====
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const multer = require ("multer");
+const dotenv = require("dotenv");
+const path = require("path");
+const { Semina, File } = require("../models/mongo");
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
+
+// FE로부터 data셋이 들어옴. 
+// data 셋의 형태: json + img or png + pdf
+// json: seminas table에 저장, img or png + pdf: R2에 저장
+// img or png + pdf는 R2에 저장 이후 url을 files table에 저장. 
+
+
+// Cloudflare R2 클라이언트 설정
+const r2 = new S3Client({
+  region: "auto",  // R2는 region 개념 없음
+  endpoint: process.env.R2_ENDPOINT, // Cloudflare R2 엔드포인트
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY,
+    secretAccessKey: process.env.R2_SECRET_KEY,
+  },
+});
+
+// `multer` 설정 (파일을 메모리에 저장)
+const storage = multer.memoryStorage();
+const upload = multer({ storage }).array("files", 10); // 최대 10개 파일 업로드
+
+// 대용량 파일이 없다고 가정, memory에 담았다가 바로 R2에 저장하는 방식 사용
+// 추후 대용량 파일을 다룬다면, multer.diskStorage()를 사용해 디스크에 저장하고, 리사이징 후 R2에 업로드하는 방식 추가 필요
+
+// JSON + 파일 업로드 컨트롤러
+const uploadHandler = async (req, res) => {
+  try {
+      console.log("[LOG] 요청 수신: JSON + 파일 업로드");
+
+      // JSON 데이터 추출 및 `Semina` 테이블 저장
+      const { speaker, topic, detail, resources, presentation_date } = req.body; // FE에서 보낸 JSON 데이터
+      console.log("[LOG] JSON 데이터 확인:", req.body);
+
+      const seminaRecord = await Semina.create({ speaker, topic, detail, resources, presentation_date });
+      console.log(`[LOG] Semina 데이터 저장 완료 (id: ${seminaRecord._id}, speaker: ${seminaRecord.speaker}), topic: ${seminaRecord.topic}`);
+
+      // 파일 업로드 (Cloudflare R2)
+      if (!req.files || req.files.length === 0) {
+          console.log('[ERROR] 업로드할 파일이 존재하지 않음');
+          return res.status(400).send("업로드할 파일이 없습니다.");
+      }
+
+      const formatDateToYYMMDD = (date) => {
+        const year = String(date.getFullYear()).slice(2);  
+        const month = String(date.getMonth() + 1).padStart(2, "0");  
+        const day = String(date.getDate()).padStart(2, "0");  
+        return `${year}${month}${day}`;
+      };
+
+      const uploadResults = await Promise.all(
+        req.files.map(async (file, index) => {  //index 추가 (파일명만 변경)
+            const fileKey = `${formatDateToYYMMDD(new Date(seminaRecord.presentation_date))}-${seminaRecord.speaker}-${index + 1}${path.extname(file.originalname)}`; // 🎯 파일명에 index 추가
+            const params = {
+                Bucket: process.env.R2_BUCKET_NAME,
+                Key: fileKey,
+                Body: file.buffer,
+                ContentType: file.mimetype,
+            };
+            await r2.send(new PutObjectCommand(params));
+            console.log(`[LOG] 파일 업로드 성공: ${fileKey}`);
+
+            return { filename: fileKey };  // DB에는 index 저장 X, 파일명만 클라이언트에 반환
+        })
+    );
+    console.log(`[LOG] File 데이터 저장 완료 (총 ${uploadResults.length}개)`);
+
+      // `File` 테이블에 저장
+      const fileRecords = await Promise.all(
+          uploadResults.map(async (file) => {
+              return await File.create({
+                  semina_id: seminaRecord._id, // Semina와 연결
+                  file_name: file.filename,
+              });
+          })
+      );
+      console.log(`[LOG] File 데이터 저장 완료 (총 ${fileRecords.length}개)`);
+      
+      // 클라이언트 응답
+      res.status(200).json({
+          message: "데이터 저장 및 파일 업로드 성공",
+          semina: seminaRecord,
+          files: fileRecords,
+      });
+
+  } catch (error) {
+      console.error("[ERROR] 업로드 실패:", error);
+      res.status(500).send("서버 오류");
+  }
+};
+
+// 컨트롤러 내보내기
+module.exports = { upload, uploadHandler };
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/routes/boAuth.js =====
+const express = require("express");
+const passport = require("passport");
+const mongoose = require("mongoose");
+const { randomToken, sha256 } = require("../utils/cryptoUtil");
+const { signAccessToken } = require("../utils/tokenUtil");
+const { permToLabels } = require("../utils/permLabels");
+const { toIpHash } = require("../utils/ipHash");
+const { AdminUser, RefreshToken, AuthCode, AdminInvite } = require("../models/admin");
+const { requireAuth } = require("../middlewares/boAuth");
+const { writeAuditLog } = require("../services/auditLogService");
+const { createRateLimiter } = require("../services/rateLimiterFactory");
+const { getRedisClient } = require("../services/redisClient");
+
+const router = express.Router();
+
+const REFRESH_GRACE_WINDOW_MS = Number(process.env.REFRESH_GRACE_WINDOW_MS || 10000);
+const refreshLocks = new Map(); // in-process dedupe; distributed lock is attempted via Redis.
+
+const oauthStartLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 10,
+});
+
+const tokenExchangeLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 5,
+});
+
+const oauthCallbackLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 10,
+});
+
+const refreshLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 30,
+  keyGenerator: (req) => {
+    const rt = req.cookies?.bo_rt;
+    if (rt) return `rt:${sha256(rt)}`;
+    return `ip:${req.ip}`;
+  },
+});
+
+const inviteLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 10,
+});
+
+async function acquireDistributedRefreshLock(lockKey) {
+  const redis = getRedisClient();
+  if (!redis) return null;
+
+  const lockValue = randomToken(16);
+  const lockRedisKey = `bo:refresh-lock:${lockKey}`;
+  const ok = await redis.set(lockRedisKey, lockValue, "PX", 15000, "NX");
+  if (ok !== "OK") return null;
+  return { redis, lockRedisKey, lockValue };
+}
+
+async function releaseDistributedRefreshLock(lock) {
+  if (!lock?.redis) return;
+  // Delete lock only if value matches (avoid deleting another owner's lock).
+  const lua = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+else
+  return 0
+end
+`;
+  try {
+    await lock.redis.eval(lua, 1, lock.lockRedisKey, lock.lockValue);
+  } catch (_e) {}
+}
+
+function parseDeviceInfo(userAgentRaw) {
+  const ua = userAgentRaw || "";
+  let os = "unknown";
+  if (/iphone|ipad|ios/i.test(ua)) os = "ios";
+  else if (/android/i.test(ua)) os = "android";
+  else if (/windows/i.test(ua)) os = "windows";
+  else if (/mac os x|macintosh/i.test(ua)) os = "macos";
+  else if (/linux/i.test(ua)) os = "linux";
+
+  let browser = "unknown";
+  if (/edg\//i.test(ua)) browser = "edge";
+  else if (/chrome\//i.test(ua) && !/edg\//i.test(ua)) browser = "chrome";
+  else if (/safari\//i.test(ua) && !/chrome\//i.test(ua)) browser = "safari";
+  else if (/firefox\//i.test(ua)) browser = "firefox";
+
+  return { os, browser };
+}
+
+function getAllowedOrigins() {
+  return (process.env.BO_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+function checkRefreshCsrf(req) {
+  const xrw = req.headers["x-requested-with"];
+  const origin = req.headers.origin || "";
+  const referer = req.headers.referer || "";
+  const allowed = getAllowedOrigins();
+
+  if (xrw !== "XMLHttpRequest") return false;
+  if (!allowed.includes(origin)) return false;
+  if (referer && !allowed.some((o) => referer.startsWith(o))) return false;
+  return true;
+}
+
+function setRefreshCookie(res, rawToken) {
+  res.cookie("bo_rt", rawToken, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/bo/auth/refresh",
+    maxAge: 14 * 24 * 60 * 60 * 1000,
+  });
+}
+
+function setOAuthStateCookie(res, state) {
+  res.cookie("bo_oauth_state", state, {
+    signed: true,
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/bo/auth/google/callback",
+    maxAge: 5 * 60 * 1000,
+  });
+}
+
+function clearOAuthStateCookie(res) {
+  res.clearCookie("bo_oauth_state", { path: "/bo/auth/google/callback" });
+}
+
+function verifyOAuthState(req, res, next) {
+  const cookieState = req.signedCookies?.bo_oauth_state;
+  const queryState = typeof req.query?.state === "string" ? req.query.state : "";
+  if (!cookieState || !queryState || cookieState !== queryState) {
+    clearOAuthStateCookie(res);
+    return res.redirect(`${process.env.BO_FRONTEND_URL}/?reason=oauth_state_invalid`);
+  }
+  clearOAuthStateCookie(res);
+  next();
+}
+
+router.get("/google", oauthStartLimiter, (req, res, next) => {
+  const state = randomToken(16);
+  setOAuthStateCookie(res, state);
+  passport.authenticate("google", {
+    session: false,
+    state,
+    scope: ["openid", "email", "profile"],
+  })(req, res, next);
+});
+
+router.get(
+  "/google/callback",
+  oauthCallbackLimiter,
+  verifyOAuthState,
+  passport.authenticate("google", {
+    session: false,
+    failureRedirect: `${process.env.BO_FRONTEND_URL}/?reason=oauth_failed`,
+  }),
+  async (req, res) => {
+    const user = req.user;
+    res.clearCookie("bo_invite_token", { path: "/" });
+
+    const code = randomToken(16);
+    await AuthCode.create({
+      codeHash: sha256(code),
+      userId: user._id,
+      expiresAt: new Date(Date.now() + 30 * 1000),
+    });
+
+    return res.redirect(`${process.env.BO_FRONTEND_URL}/auth/callback?code=${code}`);
+  }
+);
+
+router.post("/token-exchange", tokenExchangeLimiter, async (req, res) => {
+  const { code } = req.body || {};
+  if (!code) return res.status(401).json({ code: "UNAUTHORIZED" });
+
+  const doc = await AuthCode.findOneAndUpdate(
+    {
+      codeHash: sha256(code),
+      usedAt: null,
+      expiresAt: { $gt: new Date() },
+    },
+    { $set: { usedAt: new Date() } },
+    { new: true }
+  );
+  if (!doc) return res.status(401).json({ code: "UNAUTHORIZED" });
+
+  const rt = randomToken(32);
+  const tokenHash = sha256(rt);
+  const userAgent = req.headers["user-agent"] || "";
+  const parsed = parseDeviceInfo(userAgent);
+  await RefreshToken.create({
+    userId: doc.userId,
+    tokenHash,
+    expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    deviceInfo: {
+      userAgent,
+      os: parsed.os,
+      browser: parsed.browser,
+      ipHash: toIpHash(
+        req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || ""
+      ),
+      lastSeenAt: new Date(),
+    },
+  });
+
+  setRefreshCookie(res, rt);
+  const accessToken = signAccessToken(doc.userId);
+  return res.json({ accessToken });
+});
+
+router.get("/invite/:token", inviteLimiter, async (req, res) => {
+  const token = req.params.token;
+  const invite = await AdminInvite.findOne({ tokenHash: sha256(token) });
+  if (!invite) {
+    return res.redirect(`${process.env.BO_FRONTEND_URL}/?reason=invite_invalid`);
+  }
+  if (invite.expiresAt < new Date()) {
+    if (invite.status === "pending") {
+      invite.status = "expired";
+      await invite.save();
+    }
+    return res.redirect(`${process.env.BO_FRONTEND_URL}/?reason=invite_invalid`);
+  }
+  if (invite.status !== "pending") {
+    return res.redirect(`${process.env.BO_FRONTEND_URL}/?reason=invite_invalid`);
+  }
+
+  res.cookie("bo_invite_token", token, {
+    signed: true,
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 10 * 60 * 1000,
+  });
+
+  return res.redirect(`${process.env.BO_BACKEND_URL}/bo/auth/google`);
+});
+
+async function rotateRefresh(rawRt, req) {
+  const now = Date.now();
+  const tokenHash = sha256(rawRt);
+  const session = await mongoose.startSession();
+  let newRawRt;
+  let userId;
+  try {
+    await session.withTransaction(async () => {
+      // Atomic lock by tokenHash: only one request can revoke+own this token.
+      const lockedOld = await RefreshToken.findOneAndUpdate(
+        {
+          tokenHash,
+          revoked: false,
+          expiresAt: { $gt: new Date(now) },
+        },
+        { $set: { revoked: true, revokedAt: new Date() } },
+        { session, new: true }
+      );
+      if (!lockedOld) throw new Error("REFRESH_TOKEN_RACE_LOST");
+
+      const user = await AdminUser.findById(lockedOld.userId).session(session);
+      if (!user || !user.isActive) throw new Error("ACCOUNT_INACTIVE");
+
+      newRawRt = randomToken(32);
+      const newHash = sha256(newRawRt);
+      const userAgent = req.headers["user-agent"] || "";
+      const parsed = parseDeviceInfo(userAgent);
+
+      const created = await RefreshToken.create(
+        [
+          {
+            userId: lockedOld.userId,
+            tokenHash: newHash,
+            expiresAt: new Date(now + 14 * 24 * 60 * 60 * 1000),
+            deviceInfo: {
+              userAgent,
+              os: parsed.os,
+              browser: parsed.browser,
+              ipHash: toIpHash(
+                req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || ""
+              ),
+            },
+          },
+        ],
+        { session }
+      ).then((arr) => arr[0]);
+
+      await RefreshToken.updateOne(
+        { _id: lockedOld._id },
+        { $set: { replacedByTokenId: created._id } },
+        { session }
+      );
+
+      userId = String(lockedOld.userId);
+    });
+  } catch (e) {
+    if (e.message === "ACCOUNT_INACTIVE") return { error: "ACCOUNT_INACTIVE" };
+    if (e.message === "REFRESH_TOKEN_RACE_LOST") {
+      // No token issuance happened. Safely classify current token state.
+      const current = await RefreshToken.findOne({ tokenHash });
+      if (!current) return { error: "REFRESH_TOKEN_INVALID" };
+      if (current.expiresAt.getTime() < now) return { error: "REFRESH_TOKEN_EXPIRED" };
+      if (!current.revoked) return { error: "REFRESH_TOKEN_INVALID_OR_USED" };
+
+      const elapsed = now - new Date(current.revokedAt || 0).getTime();
+      if (elapsed <= REFRESH_GRACE_WINDOW_MS) return { error: "REFRESH_TOKEN_REVOKED" };
+
+      await RefreshToken.updateMany(
+        { userId: current.userId, revoked: false },
+        { $set: { revoked: true, revokedAt: new Date() } }
+      );
+      await writeAuditLog({
+        actorUserId: current.userId,
+        targetUserId: current.userId,
+        action: "REFRESH_TOKEN_REUSE_DETECTED",
+        before: { tokenId: String(current._id) },
+        after: { revokedAllTokens: true },
+        req,
+      });
+      return { error: "REFRESH_TOKEN_REUSE_DETECTED" };
+    }
+    throw e;
+  } finally {
+    await session.endSession();
+  }
+
+  return { accessToken: signAccessToken(userId), refreshToken: newRawRt };
+}
+
+router.post("/refresh", refreshLimiter, async (req, res) => {
+  if (!checkRefreshCsrf(req)) return res.status(401).json({ code: "CSRF_BLOCKED" });
+
+  const rawRt = req.cookies.bo_rt;
+  if (!rawRt) return res.status(401).json({ code: "REFRESH_TOKEN_INVALID" });
+
+  const lockKey = sha256(rawRt);
+  let distLock = null;
+  if (refreshLocks.has(lockKey)) {
+    try {
+      const result = await refreshLocks.get(lockKey);
+      if (result.error) return res.status(401).json({ code: result.error });
+      setRefreshCookie(res, result.refreshToken);
+      return res.json({ accessToken: result.accessToken });
+    } catch {
+      return res.status(401).json({ code: "REFRESH_TOKEN_INVALID" });
+    }
+  }
+
+  try {
+    distLock = await acquireDistributedRefreshLock(lockKey);
+  } catch (_e) {}
+  if (getRedisClient() && !distLock) {
+    // Another instance is likely rotating this token right now.
+    return res.status(401).json({ code: "REFRESH_TOKEN_REVOKED" });
+  }
+
+  const p = rotateRefresh(rawRt, req).finally(async () => {
+    refreshLocks.delete(lockKey);
+    await releaseDistributedRefreshLock(distLock);
+  });
+  refreshLocks.set(lockKey, p);
+
+  try {
+    const result = await p;
+    if (result.error) return res.status(401).json({ code: result.error });
+
+    setRefreshCookie(res, result.refreshToken);
+    return res.json({ accessToken: result.accessToken });
+  } catch {
+    return res.status(401).json({ code: "REFRESH_TOKEN_INVALID" });
+  }
+});
+
+router.post("/logout", async (req, res) => {
+  // Intentionally allow logout without requireAuth:
+  // access token can be expired while refresh cookie still needs revocation.
+  const rawRt = req.cookies.bo_rt;
+  if (rawRt) {
+    await RefreshToken.updateOne(
+      { tokenHash: sha256(rawRt), revoked: false },
+      { $set: { revoked: true, revokedAt: new Date() } }
+    );
+  }
+  res.clearCookie("bo_rt", { path: "/bo/auth/refresh" });
+  return res.status(200).json({ ok: true });
+});
+
+router.get("/me", requireAuth, async (req, res) => {
+  const user = await AdminUser.findById(req.auth.userId).lean();
+  return res.json({
+    id: String(user._id),
+    email: user.email,
+    name: user.name,
+    isSuperAdmin: user.isSuperAdmin,
+    isActive: user.isActive,
+    perm: user.perm,
+    permLabels: permToLabels(user.perm),
+  });
+});
+
+module.exports = router;
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/routes/boAdminUsers.js =====
+const express = require("express");
+const mongoose = require("mongoose");
+const { requireAuth, requireSuperAdmin } = require("../middlewares/boAuth");
+const { Permission } = require("../config/permissions");
+const { labelsToPerm } = require("../utils/permLabels");
+const { AdminUser, RefreshToken } = require("../models/admin");
+const { writeAuditLog } = require("../services/auditLogService");
+
+const router = express.Router();
+
+router.get("/", requireAuth, requireSuperAdmin, async (_req, res) => {
+  const users = await AdminUser.find({})
+    .select("email name perm isSuperAdmin isActive lastLoginAt createdAt")
+    .sort({ createdAt: -1 })
+    .lean();
+  return res.json(users);
+});
+
+router.patch("/:id/perm", requireAuth, requireSuperAdmin, async (req, res) => {
+  const { labels = [] } = req.body || {};
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const target = await AdminUser.findById(req.params.id).session(session);
+      if (!target) {
+        const e = new Error("NOT_FOUND");
+        e.status = 404;
+        throw e;
+      }
+
+      const before = { perm: target.perm };
+      target.perm = labelsToPerm(labels) | Permission.READ;
+      await target.save({ session });
+
+      await writeAuditLog({
+        actorUserId: req.auth.userId,
+        targetUserId: target._id,
+        action: "ADMIN_PERM_CHANGED",
+        before,
+        after: { perm: target.perm },
+        req,
+        session,
+      });
+    });
+  } catch (e) {
+    if (e.message === "NOT_FOUND") return res.status(404).json({ code: "NOT_FOUND" });
+    throw e;
+  } finally {
+    await session.endSession();
+  }
+
+  return res.json({ ok: true });
+});
+
+router.patch("/:id/active", requireAuth, requireSuperAdmin, async (req, res) => {
+  const { isActive } = req.body || {};
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const target = await AdminUser.findById(req.params.id).session(session);
+      if (!target) {
+        const e = new Error("NOT_FOUND");
+        e.status = 404;
+        throw e;
+      }
+
+      const before = { isActive: target.isActive };
+      target.isActive = !!isActive;
+      await target.save({ session });
+
+      if (!target.isActive) {
+        await RefreshToken.updateMany(
+          { userId: target._id, revoked: false },
+          { $set: { revoked: true, revokedAt: new Date() } },
+          { session }
+        );
+      }
+
+      await writeAuditLog({
+        actorUserId: req.auth.userId,
+        targetUserId: target._id,
+        action: "ADMIN_ACTIVE_CHANGED",
+        before,
+        after: { isActive: target.isActive },
+        req,
+        session,
+      });
+    });
+  } catch (e) {
+    if (e.message === "NOT_FOUND") return res.status(404).json({ code: "NOT_FOUND" });
+    throw e;
+  } finally {
+    await session.endSession();
+  }
+
+  return res.json({ ok: true });
+});
+
+router.patch("/:id/super-admin", requireAuth, requireSuperAdmin, async (req, res) => {
+  const { isSuperAdmin } = req.body || {};
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const target = await AdminUser.findById(req.params.id).session(session);
+      if (!target) {
+        const e = new Error("NOT_FOUND");
+        e.status = 404;
+        throw e;
+      }
+
+      if (String(target._id) === req.auth.userId && isSuperAdmin === false) {
+        const e = new Error("SELF_SUPER_ADMIN_DOWNGRADE_FORBIDDEN");
+        e.status = 400;
+        throw e;
+      }
+
+      if (target.isSuperAdmin && isSuperAdmin === false) {
+        const count = await AdminUser.countDocuments({ isSuperAdmin: true }).session(session);
+        if (count <= 1) {
+          const e = new Error("LAST_SUPER_ADMIN_FORBIDDEN");
+          e.status = 400;
+          throw e;
+        }
+      }
+
+      const before = { isSuperAdmin: target.isSuperAdmin };
+      target.isSuperAdmin = !!isSuperAdmin;
+      await target.save({ session });
+
+      await writeAuditLog({
+        actorUserId: req.auth.userId,
+        targetUserId: target._id,
+        action: "ADMIN_SUPER_ADMIN_CHANGED",
+        before,
+        after: { isSuperAdmin: target.isSuperAdmin },
+        req,
+        session,
+      });
+    });
+  } catch (e) {
+    if (e.message === "NOT_FOUND") return res.status(404).json({ code: "NOT_FOUND" });
+    if (e.message === "SELF_SUPER_ADMIN_DOWNGRADE_FORBIDDEN") {
+      return res.status(400).json({ code: "SELF_SUPER_ADMIN_DOWNGRADE_FORBIDDEN" });
+    }
+    if (e.message === "LAST_SUPER_ADMIN_FORBIDDEN") {
+      return res.status(400).json({ code: "LAST_SUPER_ADMIN_FORBIDDEN" });
+    }
+    throw e;
+  } finally {
+    await session.endSession();
+  }
+
+  return res.json({ ok: true });
+});
+
+module.exports = router;
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/routes/boAdminInvites.js =====
+const express = require("express");
+const mongoose = require("mongoose");
+const { requireAuth, requireSuperAdmin } = require("../middlewares/boAuth");
+const { Permission } = require("../config/permissions");
+const { labelsToPerm } = require("../utils/permLabels");
+const { randomToken, sha256 } = require("../utils/cryptoUtil");
+const { AdminInvite } = require("../models/admin");
+const { writeAuditLog } = require("../services/auditLogService");
+
+const router = express.Router();
+const INVITE_STATUSES = new Set(["pending", "used", "expired", "revoked"]);
+
+router.get("/", requireAuth, requireSuperAdmin, async (req, res) => {
+  const query = {};
+  if (typeof req.query?.status === "string" && INVITE_STATUSES.has(req.query.status)) {
+    query.status = req.query.status;
+  }
+
+  const invites = await AdminInvite.find(query)
+    .select("email perm status expiresAt invitedBy usedByUserId createdAt updatedAt")
+    .sort({ createdAt: -1 })
+    .lean();
+  return res.json(invites);
+});
+
+router.post("/", requireAuth, requireSuperAdmin, async (req, res) => {
+  const { email, perm, labels = ["read/all"], expiresInSec = 172800 } = req.body || {};
+  if (!email) return res.status(400).json({ code: "INVALID_INPUT" });
+  if (expiresInSec < 3600 || expiresInSec > 604800) {
+    return res.status(400).json({ code: "INVALID_EXPIRES" });
+  }
+
+  let invitePerm;
+  if (Number.isInteger(perm) && perm >= 0) {
+    invitePerm = perm | Permission.READ;
+  } else {
+    invitePerm = labelsToPerm(labels) | Permission.READ;
+  }
+  const token = randomToken(32);
+  const tokenHash = sha256(token);
+  const normEmail = String(email).trim().toLowerCase();
+
+  await AdminInvite.updateMany({ email: normEmail, status: "pending" }, { $set: { status: "revoked" } });
+
+  const invite = await AdminInvite.create({
+    email: normEmail,
+    perm: invitePerm,
+    tokenHash,
+    expiresAt: new Date(Date.now() + expiresInSec * 1000),
+    invitedBy: req.auth.userId,
+  });
+
+  await writeAuditLog({
+    actorUserId: req.auth.userId,
+    action: "ADMIN_INVITE_CREATED",
+    after: { inviteId: String(invite._id), email: normEmail, perm: invitePerm, expiresInSec },
+    req,
+  });
+
+  return res.status(201).json({
+    inviteUrl: `${process.env.BO_BACKEND_URL}/bo/auth/invite/${token}`,
+  });
+});
+
+router.patch("/:id/revoke", requireAuth, requireSuperAdmin, async (req, res) => {
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const invite = await AdminInvite.findById(req.params.id).session(session);
+      if (!invite) {
+        const e = new Error("NOT_FOUND");
+        e.status = 404;
+        throw e;
+      }
+      if (invite.status !== "pending") {
+        const e = new Error("INVITE_NOT_PENDING");
+        e.status = 409;
+        throw e;
+      }
+
+      invite.status = "revoked";
+      await invite.save({ session });
+
+      await writeAuditLog({
+        actorUserId: req.auth.userId,
+        action: "ADMIN_INVITE_REVOKED",
+        after: { inviteId: String(invite._id), email: invite.email },
+        req,
+        session,
+      });
+    });
+  } catch (e) {
+    if (e.message === "NOT_FOUND") return res.status(404).json({ code: "NOT_FOUND" });
+    if (e.message === "INVITE_NOT_PENDING") return res.status(409).json({ code: "INVITE_NOT_PENDING" });
+    throw e;
+  } finally {
+    await session.endSession();
+  }
+
+  return res.json({ ok: true });
+});
+
+router.post("/:id/reissue", requireAuth, requireSuperAdmin, async (req, res) => {
+  const { perm, labels, expiresInSec = 172800 } = req.body || {};
+  if (expiresInSec < 3600 || expiresInSec > 604800) {
+    return res.status(400).json({ code: "INVALID_EXPIRES" });
+  }
+
+  const session = await mongoose.startSession();
+  let inviteUrl;
+  try {
+    await session.withTransaction(async () => {
+      const baseInvite = await AdminInvite.findById(req.params.id).session(session);
+      if (!baseInvite) {
+        const e = new Error("NOT_FOUND");
+        e.status = 404;
+        throw e;
+      }
+
+      await AdminInvite.updateMany(
+        { email: baseInvite.email, status: "pending" },
+        { $set: { status: "revoked" } },
+        { session }
+      );
+
+      let invitePerm;
+      if (Number.isInteger(perm) && perm >= 0) {
+        invitePerm = perm | Permission.READ;
+      } else if (Array.isArray(labels)) {
+        invitePerm = labelsToPerm(labels) | Permission.READ;
+      } else {
+        invitePerm = baseInvite.perm | Permission.READ;
+      }
+
+      const token = randomToken(32);
+      const tokenHash = sha256(token);
+      const created = await AdminInvite.create(
+        [
+          {
+            email: baseInvite.email,
+            perm: invitePerm,
+            tokenHash,
+            expiresAt: new Date(Date.now() + expiresInSec * 1000),
+            invitedBy: req.auth.userId,
+          },
+        ],
+        { session }
+      ).then((arr) => arr[0]);
+
+      await writeAuditLog({
+        actorUserId: req.auth.userId,
+        action: "ADMIN_INVITE_REISSUED",
+        after: {
+          sourceInviteId: String(baseInvite._id),
+          newInviteId: String(created._id),
+          email: created.email,
+          perm: created.perm,
+          expiresInSec,
+        },
+        req,
+        session,
+      });
+
+      inviteUrl = `${process.env.BO_BACKEND_URL}/bo/auth/invite/${token}`;
+    });
+  } catch (e) {
+    if (e.message === "NOT_FOUND") return res.status(404).json({ code: "NOT_FOUND" });
+    throw e;
+  } finally {
+    await session.endSession();
+  }
+
+  return res.status(201).json({ inviteUrl });
+});
+
+module.exports = router;
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/routes/member.js =====
+const express = require("express");
+const { Member } = require("../models/mongo");
+const getData = require("../controllers/getdata");
+const getPDF = require("../controllers/getpdf");
+const { requireAuth, requirePerm } = require("../middlewares/boAuth");
+const { Permission } = require("../config/permissions");
+
+const router = express.Router();
+
+router.get("/", requireAuth, requirePerm(Permission.READ), getData(Member));
+router.get("/pdf/:filename", requireAuth, requirePerm(Permission.READ), getPDF);
+
+module.exports = router;
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/routes/semina.js =====
+const express = require("express");
+const { upload, uploadHandler } = require("../controllers/uploadtoR2");
+const { requireAuth, requirePerm } = require("../middlewares/boAuth");
+const { Permission } = require("../config/permissions");
+
+const router = express.Router();
+
+router.post("/", requireAuth, requirePerm(Permission.WRITE_ACTIVITY), upload, uploadHandler);
+
+module.exports = router;
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/routes/feature.js =====
+const express = require("express");
+const { checkRecruit, changeRecruit } = require("../controllers/recruit");
+const { requireAuth, requirePerm } = require("../middlewares/boAuth");
+const { Permission } = require("../config/permissions");
+
+const router = express.Router();
+
+router.get("/recruit", requireAuth, requirePerm(Permission.READ), checkRecruit);
+router.patch(
+  "/recruit",
+  requireAuth,
+  requirePerm(Permission.WRITE_RECRUIT_FORM),
+  changeRecruit
+);
+
+router.get("/club-info", requireAuth, requirePerm(Permission.READ), (_req, res) => {
+  return res.status(501).json({ code: "NOT_IMPLEMENTED" });
+});
+
+router.patch(
+  "/club-info",
+  requireAuth,
+  requirePerm(Permission.WRITE_CLUB_INFO),
+  (_req, res) => {
+    return res.status(501).json({ code: "NOT_IMPLEMENTED" });
+  }
+);
+
+module.exports = router;
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/src/app.js =====
+const express = require("express");
+const morgan = require("morgan");
+const winston = require("winston");
+const cookieParser = require("cookie-parser");
+const path = require("path");
+const helmet = require("helmet");
+const hpp = require("hpp");
+const cors = require("cors");
+const passport = require("passport");
+
+require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
+
+const app = express();
+const NODE_ENV = process.env.NODE_ENV || "development";
+const PORT = process.env.PORT || 4000;
+
+[
+  "COOKIE_SECRET",
+  "ACCESS_TOKEN_SECRET",
+  "BO_BACKEND_URL",
+  "BO_FRONTEND_URL",
+  "BO_ALLOWED_ORIGINS",
+  "MONGO_URI",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "SERVER_SECRET_SALT",
+].forEach((k) => {
+  if (!process.env[k]) throw new Error(`${k} is required`);
+});
+
+const { connectMongo } = require("./config/mongo");
+const { bootstrapSuperAdmin } = require("./services/superAdminBootstrap");
+const { getRedisMode } = require("./services/redisClient");
+const passportConfig = require("./passport");
+
+const memberRouter = require("./routes/member");
+const seminaRouter = require("./routes/semina");
+const featureRouter = require("./routes/feature");
+const boAuthRouter = require("./routes/boAuth");
+const boAdminUsersRouter = require("./routes/boAdminUsers");
+const boAdminInvitesRouter = require("./routes/boAdminInvites");
+
+const swaggerUi = require("swagger-ui-express");
+const swaggerDocument = require("./swagger.json");
+
+const allowedOrigins = process.env.BO_ALLOWED_ORIGINS.split(",")
+  .map((v) => v.trim())
+  .filter(Boolean);
+
+app.use(cookieParser(process.env.COOKIE_SECRET));
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(passport.initialize());
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    credentials: true,
+  })
+);
+
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    frameguard: { action: "deny" },
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    noSniff: true,
+  })
+);
+
+if (NODE_ENV === "development") {
+  app.use(morgan("dev"));
+} else {
+  app.enable("trust proxy");
+  app.use(morgan("combined"));
+  app.use(hpp());
+}
+
+app.use("/bo/auth", boAuthRouter);
+app.use("/bo/admin/users", boAdminUsersRouter);
+app.use("/bo/admin/invites", boAdminInvitesRouter);
+app.use("/bo/member", memberRouter);
+app.use("/bo/semina", seminaRouter);
+app.use("/bo/feature", featureRouter);
+
+if (NODE_ENV === "development" || NODE_ENV === "test") {
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+}
+
+const logger = winston.createLogger({
+  level: "error",
+  format: winston.format.json(),
+  transports: [new winston.transports.File({ filename: "error.log" })],
+});
+
+app.use((err, _req, res, _next) => {
+  if (NODE_ENV === "development" || NODE_ENV === "test") {
+    console.error(err.stack || err);
+  } else {
+    logger.error(err.message || "Unexpected error");
+  }
+
+  res.status(err.status || 500).json({
+    code: "INTERNAL_ERROR",
+    message: "Internal Server Error",
+  });
+});
+
+async function startServer() {
+  try {
+    passportConfig();
+
+    await connectMongo();
+    await bootstrapSuperAdmin();
+
+    const rateLimiterMode = getRedisMode();
+    console.log(`[LOG] Rate limiter mode: ${rateLimiterMode}`);
+
+    app.listen(PORT, () => {
+      console.log(`PORT: ${PORT}`);
+      console.log(`server: http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    console.error("Server start failed:", err);
+    process.exit(1);
+  }
+}
+
+startServer();
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/frontend/src/auth/tokenStore.js =====
+let accessToken = null;
+
+export function getAccessToken() {
+  return accessToken;
+}
+
+export function setAccessToken(token) {
+  accessToken = token;
+}
+
+export function clearAccessToken() {
+  accessToken = null;
+}
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/frontend/src/auth/authClient.js =====
+import axios from "axios";
+import { getAccessToken, setAccessToken, clearAccessToken } from "./tokenStore";
+
+const BASE_URL = process.env.REACT_APP_BACKEND_URL;
+
+const http = axios.create({
+  baseURL: BASE_URL,
+  withCredentials: true,
+});
+
+const channel = new BroadcastChannel("bo-auth");
+let refreshPromise = null;
+
+channel.onmessage = (e) => {
+  if (e.data?.type === "TOKEN_REFRESHED") {
+    setAccessToken(e.data.accessToken);
+    refreshPromise = null;
+  }
+  if (e.data?.type === "LOGOUT") {
+    clearAccessToken();
+    refreshPromise = null;
+    const alreadyOnExpiredPage =
+      window.location.pathname === "/" && window.location.search.includes("reason=session_expired");
+    if (!alreadyOnExpiredPage) {
+      window.location.replace("/?reason=session_expired");
+    }
+  }
+};
+
+http.interceptors.request.use((config) => {
+  const token = getAccessToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+async function refreshAccessToken() {
+  const res = await axios.post(
+    `${BASE_URL}/bo/auth/refresh`,
+    {},
+    {
+      withCredentials: true,
+      headers: { "X-Requested-With": "XMLHttpRequest" },
+    }
+  );
+  const token = res.data.accessToken;
+  setAccessToken(token);
+  channel.postMessage({ type: "TOKEN_REFRESHED", accessToken: token });
+  return token;
+}
+
+http.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    const original = error.config;
+    const code = error.response?.data?.code;
+    const status = error.response?.status;
+    const isRefreshCall = (original?.url || "").includes("/bo/auth/refresh");
+
+    if (status !== 401 || original?._retry || isRefreshCall) {
+      return Promise.reject(error);
+    }
+
+    if (
+      code === "REFRESH_TOKEN_REUSE_DETECTED" ||
+      code === "REFRESH_TOKEN_INVALID" ||
+      code === "REFRESH_TOKEN_INVALID_OR_USED" ||
+      code === "REFRESH_TOKEN_EXPIRED"
+    ) {
+      clearAccessToken();
+      channel.postMessage({ type: "LOGOUT" });
+      window.location.replace("/?reason=session_expired");
+      return Promise.reject(error);
+    }
+
+    original._retry = true;
+
+    if (!refreshPromise) {
+      refreshPromise = refreshAccessToken().finally(() => {
+        refreshPromise = null;
+      });
+    }
+
+    const newToken = await refreshPromise;
+    original.headers.Authorization = `Bearer ${newToken}`;
+    return http(original);
+  }
+);
+
+export async function bootstrapAuth() {
+  try {
+    const token = await refreshAccessToken();
+    return token;
+  } catch {
+    clearAccessToken();
+    return null;
+  }
+}
+
+export default http;
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/frontend/src/auth/AuthProvider.jsx =====
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import http, { bootstrapAuth } from "./authClient";
+import { clearAccessToken } from "./tokenStore";
+
+const AuthContext = createContext(null);
+const authChannel = new BroadcastChannel("bo-auth");
+
+export function AuthProvider({ children }) {
+  const [loading, setLoading] = useState(true);
+  const [me, setMe] = useState(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      const token = await bootstrapAuth();
+      if (!mounted) return;
+
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await http.get("/bo/auth/me");
+        if (mounted) setMe(res.data);
+      } catch {
+        clearAccessToken();
+        if (mounted) setMe(null);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const logout = useCallback(async () => {
+    try {
+      await http.post("/bo/auth/logout");
+    } catch (_e) {
+      // logout best-effort: token cleanup continues even if request fails
+    }
+    clearAccessToken();
+    authChannel.postMessage({ type: "LOGOUT" });
+    setMe(null);
+    navigate("/");
+  }, [navigate]);
+
+  const value = useMemo(() => ({ loading, me, setMe, logout }), [loading, me, logout]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  return useContext(AuthContext);
+}
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/frontend/src/auth/useCan.js =====
+import { useAuth } from "./AuthProvider";
+
+const PERM = {
+  READ: 1 << 0,
+  WRITE_ACTIVITY: 1 << 1,
+  WRITE_RECRUIT_FORM: 1 << 2,
+  WRITE_CLUB_INFO: 1 << 3,
+};
+
+export function useCan() {
+  const { me } = useAuth();
+
+  return {
+    PERM,
+    isSuperAdmin: !!me?.isSuperAdmin,
+    has: (mask) => ((me?.perm || 0) & mask) === mask,
+  };
+}
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/frontend/src/components/RequireAuth.jsx =====
+import React from "react";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthProvider";
+
+export default function RequireAuth({ children }) {
+  const { loading, me } = useAuth();
+  if (loading) return null;
+  if (!me) return <Navigate to="/" replace />;
+  return children;
+}
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/frontend/src/components/Can.jsx =====
+import React from "react";
+import { useCan } from "../auth/useCan";
+
+export default function Can({ mask, superAdminOnly = false, children, fallback = null }) {
+  const { has, isSuperAdmin } = useCan();
+
+  if (superAdminOnly && !isSuperAdmin) return fallback;
+  if (mask && !has(mask)) return fallback;
+  return children;
+}
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/frontend/src/page/AuthCallback.jsx =====
+import { useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import axios from "axios";
+import { setAccessToken } from "../auth/tokenStore";
+import http from "../auth/authClient";
+import { useAuth } from "../auth/AuthProvider";
+
+const BASE_URL = process.env.REACT_APP_BACKEND_URL;
+
+export default function AuthCallback() {
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const { setMe } = useAuth();
+
+  useEffect(() => {
+    const code = params.get("code");
+    if (!code) {
+      navigate("/?reason=missing_code");
+      return;
+    }
+
+    axios
+      .post(`${BASE_URL}/bo/auth/token-exchange`, { code }, { withCredentials: true })
+      .then(async (res) => {
+        setAccessToken(res.data.accessToken);
+        const meRes = await http.get("/bo/auth/me");
+        setMe(meRes.data);
+        navigate("/recruitDB");
+      })
+      .catch((err) => {
+        const code = err?.response?.data?.code;
+        const reasonMap = {
+          OAUTH_STATE_INVALID: "oauth_state_invalid",
+          OAUTH_CLAIMS_INVALID: "oauth_claims_invalid",
+          INVITE_EMAIL_MISMATCH: "invite_email_mismatch",
+          ACCOUNT_INACTIVE: "account_inactive",
+          INVITE_EXPIRED: "invite_expired",
+          INVITE_REVOKED: "invite_revoked",
+          INVITE_ALREADY_USED: "invite_already_used",
+          EMAIL_NOT_VERIFIED: "email_not_verified",
+          GOOGLE_SUB_CONFLICT: "google_sub_conflict",
+        };
+        const reason = reasonMap[code] || "auth_failed";
+        navigate(`/?reason=${reason}`);
+      });
+  }, [params, navigate, setMe]);
+
+  return null;
+}
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/frontend/src/page/login.jsx =====
+import "../style/login.css";
+import React from "react";
+
+const BASE_URL = process.env.REACT_APP_BACKEND_URL;
+
+export default function Login() {
+  const onGoogleLogin = () => {
+    window.location.href = `${BASE_URL}/bo/auth/google`;
+  };
+
+  return (
+    <div className="lg_container">
+      <header className="lg_logo_Quipu">Quipu Admin</header>
+      <div className="lg_box_login">
+        <button onClick={onGoogleLogin}>Google로 로그인</button>
+      </div>
+    </div>
+  );
+}
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/frontend/src/App.js =====
+import "./App.css";
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import RecruitDB from "./page/recruitDB";
+import Login from "./page/login";
+import AuthCallback from "./page/AuthCallback";
+import RequireAuth from "./components/RequireAuth";
+import { AuthProvider } from "./auth/AuthProvider";
+import { Toaster } from "react-hot-toast";
+
+function App() {
+  return (
+    <div className="container">
+      <Router>
+        <AuthProvider>
+          <Routes>
+            <Route path="/" element={<Login />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route
+              path="/recruitDB"
+              element={
+                <RequireAuth>
+                  <RecruitDB />
+                </RequireAuth>
+              }
+            />
+          </Routes>
+          <Toaster />
+        </AuthProvider>
+      </Router>
+    </div>
+  );
+}
+
+export default App;
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/frontend/src/api/logout_api.jsx =====
+import http from "../auth/authClient";
+
+export const logout = async () => {
+  const response = await http.post("/bo/auth/logout");
+  return response;
+};
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/frontend/src/api/recruitDB_api.jsx =====
+import http from "../auth/authClient";
+
+export const fetchGeneralData = async () => {
+  const response = await http.get("/bo/data/joinquipu_general", {
+    headers: { accept: "application/json" },
+  });
+  return response.data;
+};
+
+export const fetchDevData = async () => {
+  const response = await http.get("/bo/data/joinquipu_dev", {
+    headers: { accept: "application/json" },
+  });
+  return response.data;
+};
+
+export const fetchMemberData = async () => {
+  const response = await http.get("/bo/member", {
+    headers: { accept: "application/json" },
+  });
+  return response.data;
+};
+
+const getPdf = async (filename) => {
+  try {
+    const response = await http.get(`/bo/member/pdf/${filename}`, {
+      headers: { accept: "application/json" },
+      responseType: "blob",
+    });
+    return response;
+  } catch (err) {
+    if (err.response && err.response.status === 404) {
+      return { status: 404 };
+    }
+    throw err;
+  }
+};
+
+const downloadPdf = (filename, blob) => {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+};
+
+export const fetchAndSavePortfolio = async (filename) => {
+  try {
+    const response = await getPdf(filename);
+    if (response.status === 200) {
+      downloadPdf(filename, response.data);
+    } else if (response.status === 404) {
+      alert("파일이 존재하지 않습니다.");
+    }
+  } catch (_error) {
+    alert("서버 에러");
+  }
+};
+
+export const recruitStateCheck = async () => {
+  const response = await http.get("/bo/feature/recruit", {
+    headers: { accept: "application/json" },
+  });
+  return response;
+};
+
+export const recruitStateChange = async () => {
+  const response = await http.patch(
+    "/bo/feature/recruit",
+    {},
+    {
+      headers: { accept: "application/json" },
+    }
+  );
+  return response;
+};
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/backend/package.json =====
+{
+  "name": "backoffice",
+  "version": "0.0.1",
+  "description": "",
+  "main": "src/app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon src/app.js"
+  },
+  "author": "ejjem",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.758.0",
+    "@aws-sdk/s3-request-presigner": "^3.758.0",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "fs": "^0.0.1-security",
+    "helmet": "^7.1.0",
+    "hpp": "^0.2.3",
+    "ioredis": "^5.7.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.13.0",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "nodemon": "^3.1.4",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "process": "^0.11.10",
+    "rate-limit-redis": "^4.3.0",
+    "swagger-ui-express": "^5.0.1",
+    "winston": "^3.19.0"
+  }
+}
+
+
+===== /Users/a456/Desktop/quipuWebProject/backoffice/feature/01-bo-auth-appendix.md =====
+# 01. BO Auth 기술 상세 Appendix
+
+## 문서 관계 / 소스 오브 트루스
+
+- 이 Appendix는 기술 구현 기준 문서다.
+- 기존 [01-bo-auth.md](./01-bo-auth.md)의 기술 상세(데이터 모델, 인증/토큰, 권한 검사, 인덱스, 에러 코드)는 이 Appendix 기준으로 대체한다.
+- PM 의사결정/일정/리스크는 [01-bo-auth-plan.md](./01-bo-auth.md)를 기준으로 본다.
+
+## A) 목표 아키텍처 요약
+
+- 인증: Google OAuth
+- API 인증 유지: Authorization Bearer Token
+- DB: MongoDB
+- 권한: `perm` 비트마스크
+- 계정 온보딩: 초대 링크 기반
+
+## B) 데이터 모델
+
+- IP 개인정보 최소화 정책은 `admin_audit_logs`, `refresh_tokens` 모두에 동일 적용한다(원문 IP 미저장, `ipHash` 사용).
+
+## B.1 `admin_users`
+
+- `email` (unique, required)
+- `googleSub` (unique, nullable)
+- `name` (nullable)
+- `pictureUrl` (nullable)
+- `perm` (number, default `READ`)
+- `isSuperAdmin` (boolean, default false)
+- `isActive` (boolean, default true)
+- `lastLoginAt`
+- `createdAt`, `updatedAt`
+
+## B.2 `admin_invites`
+
+- `email` (required)
+- `perm` (number, default `READ`)
+- `tokenHash` (unique, required)
+- `expiresAt` (required)
+- `status` (`pending`, `used`, `expired`, `revoked`)
+- `invitedBy` (required)
+- `usedByUserId` (nullable)
+- `createdAt`, `updatedAt`
+
+## B.3 `admin_audit_logs`
+
+- `actorUserId`
+- `targetUserId`
+- `action`
+- `before`, `after`
+- `ipHash` (원문 IP 저장 금지, `HMAC-SHA256(ip, SERVER_SECRET_SALT)` 적용)
+- `userAgent`
+- `createdAt`
+
+## B.4 `refresh_tokens`
+
+- `userId` (required)
+- `tokenHash` (unique, required)
+- `expiresAt` (required)
+- `revoked` (boolean, default false)
+- `revokedAt` (nullable)
+- `deviceInfo`
+  - `userAgent` (raw string)
+  - `os` (parsed)
+  - `browser` (parsed)
+  - `ipHash` (선택, 원문 IP 저장 금지 권장)
+    - 알고리즘: `HMAC-SHA256(ip, SERVER_SECRET_SALT)`
+    - 운영 정책: `SERVER_SECRET_SALT`는 운영 중 교체 금지
+    - 주의: secret 변경 시 기존 `ipHash` 비교/조회가 불가능해짐
+    - 조회/비교: 세션 목록/필터링은 원문 IP가 아닌 `ipHash` 기준으로 처리
+    - 비상 교체 절차:
+      - 트리거: secret 유출이 확인/강하게 의심되는 경우
+      - 조치: `refresh_tokens` 전체 revoke + 전체 재로그인 유도 공지
+      - 영향: 기존 `ipHash` 기반 조회/필터링 일시 불가
+      - 기록: 교체 시각/사유/조치 내역을 운영 로그 및 감사 로그에 기록
+  - `lastSeenAt` (선택)
+- `createdAt`, `updatedAt`
+
+## B.5 `auth_codes` (OAuth callback code exchange)
+
+- `codeHash` (unique, required)
+- `userId` (required)
+- `expiresAt` (required, short-lived)
+- `usedAt` (nullable, 1회 교환 후 즉시 마킹)
+- `createdAt`, `updatedAt`
+- 운영 원칙:
+  - 원문 code 저장 금지, `codeHash`만 저장
+  - 매우 짧은 만료(예: 30초) + 1회 사용 원칙
+  - `expiresAt` TTL 인덱스로 자동 정리
+
+## C) 권한 모델
+
+```ts
+enum Permission {
+  READ = 1 << 0,
+  WRITE_ACTIVITY = 1 << 1,
+  WRITE_RECRUIT_FORM = 1 << 2,
+  WRITE_CLUB_INFO = 1 << 3,
+}
+```
+
+권한 체크:
+
+- `(perm & WRITE_ACTIVITY) !== 0`
+- `(perm & WRITE_RECRUIT_FORM) !== 0`
+- `(perm & WRITE_CLUB_INFO) !== 0`
+- `(perm & REQUIRED_MASK) === REQUIRED_MASK`
+
+운영 UI:
+
+- 내부 저장은 비트마스크
+- 화면은 라벨(`read/all`, `write/activity`, `write/recruit-form`, `write/club-info`, `write/all`)로 표시
+- `write/all`은 별도 비트를 두지 않고 `WRITE_ACTIVITY | WRITE_RECRUIT_FORM | WRITE_CLUB_INFO` OR 합산값으로 해석한다.
+- UI 역변환 규칙: `(perm & (WRITE_ACTIVITY | WRITE_RECRUIT_FORM | WRITE_CLUB_INFO)) === (WRITE_ACTIVITY | WRITE_RECRUIT_FORM | WRITE_CLUB_INFO)`이면 `write/all`로 표시하고, 아니면 보유한 개별 write 라벨만 표시한다.
+
+비트 관리 규칙:
+
+- 신규 권한은 `2^n` 값만 사용
+- 기존 비트 값 변경 금지
+- 중앙 enum 파일에서만 권한 정의
+- 32bit 초과 시 64bit/bigint 확장 정책 적용
+
+## D) 인증/토큰 정책
+
+## D.1 Access Token
+
+- 만료: 10~15분(최대 15분)
+- 저장: 메모리 저장(브라우저 새로고침 시 초기화되는 런타임 메모리; 예: 앱 전역 state/in-memory store)
+- `localStorage/sessionStorage` 저장 금지
+- `jti` claim 포함(필요 시 replay 탐지 확장)
+
+## D.2 Refresh Token
+
+- 만료: 14일
+- 저장: `httpOnly + Secure + SameSite` cookie 권장
+- rotation + revoke 적용
+- 다중 디바이스 분리 관리
+- FE는 refresh token 기반 silent refresh로 페이지 reload 시 세션을 복구한다.
+- 도메인 정책(확정):
+  - Option A 채택: 리버스 프록시로 FE/BE 요청 경로를 same-site로 정렬
+  - FE는 동일 사이트 경로(예: `/api`)로 호출하고 프록시가 BE로 전달
+  - refresh cookie는 same-site 기준으로 처리해 Safari ITP 영향 구간을 최소화
+  - `SameSite=Lax` 이상을 기본으로 하고 운영 환경은 `Secure` 필수 적용
+- 잔여 리스크 및 대응:
+  - 프록시 misconfiguration으로 cross-site 전송이 남는 경우 Safari에서 silent refresh 실패 가능
+  - Phase 1 QA에서 Safari refresh 실패가 확인되면 프록시 규칙 우선 수정, 인프라 제약으로 불가 시 BFF 패턴 전환
+
+rotation atomic 처리:
+
+- 동시 refresh 요청 중복 방지:
+  - FE 1차 방어(필수): 탭 내부 싱글턴 Promise lock으로 refresh 중복 호출을 차단한다.
+  - FE 2차 방어(권장): `BroadcastChannel('auth')`로 탭 간 신규 access token을 공유한다.
+  - BE 안전망(권장): `revokedAt` 기준 grace window(5~10초) 정책을 적용한다.
+    - grace window 이내 재사용: 경쟁 조건으로 판단(`REFRESH_TOKEN_REVOKED`) 후 재로그인 강제 없이 복구 경로 안내
+    - grace window 초과 재사용: 탈취 의심으로 판단(`REFRESH_TOKEN_REUSE_DETECTED`) 후 전체 refresh token revoke
+
+1. `revoked=false` 조건으로 토큰 조회/전환
+2. 기존 토큰 revoke
+3. 새 refresh token 저장
+4. 새 access token 발급
+5. 2~4 중 하나라도 실패 시 전체 롤백(트랜잭션 정책은 `N) 트랜잭션 정책` 참조)
+
+reuse detection:
+
+- revoke된 refresh token 재사용 시 `REFRESH_TOKEN_REUSE_DETECTED`
+- 보안 이벤트 기록
+- 해당 사용자 전체 refresh token 강제 revoke
+
+## D.3 CSRF 경계
+
+- 일반 Bearer API는 CSRF 영향 낮음
+- refresh 엔드포인트는 cookie 사용으로 CSRF 방어 필수
+- refresh 엔드포인트 CSRF 방어:
+  - 요청 시 커스텀 헤더(`X-Requested-With: XMLHttpRequest`) 필수 포함
+  - 서버는 해당 헤더 부재 시 요청 거부 (`401`)
+  - CORS preflight 의존 방식이므로 `Access-Control-Allow-Origin` 설정 엄격 유지 필수
+  - 허용 도메인은 운영 allowlist로 관리하며(예: `BO_ALLOWED_ORIGINS`), 와일드카드(`*`) 사용 금지
+  - 추가 검증: `Origin`(필수) 및 `Referer`(보조) 값을 allowlist와 대조하고 불일치 시 거부
+- 한계 및 보완:
+  - `X-Requested-With` 단독 방식은 same-origin/프록시 환경에서 우회 가능성이 있으므로 단독 방어로 간주하지 않는다.
+  - 따라서 custom header + origin/referer 검증을 기본 세트로 적용한다.
+- refresh 요청 통과 조건(체크리스트):
+  - `X-Requested-With: XMLHttpRequest` 헤더 존재
+  - `Origin`이 `BO_ALLOWED_ORIGINS` allowlist와 일치
+  - `Referer`(존재 시)가 `BO_ALLOWED_ORIGINS` allowlist와 일치
+  - 위 조건을 모두 만족할 때만 통과, 하나라도 불일치하면 `401` 거부
+
+## D.4 OAuth Callback -> AuthCode -> Token Exchange 플로우
+
+- 목적:
+  - OAuth callback 직후 access/refresh token 원문을 URL query/hash에 직접 노출하지 않기 위함
+  - SPA 라우팅 환경에서 브라우저 히스토리/로그/리퍼러를 통한 토큰 유출 위험 완화
+- 처리 순서:
+  1. `GET /bo/auth/google/callback` 성공 시 서버는 short-lived 1회용 code를 발급한다.
+  2. 서버는 `auth_codes`에 `codeHash`만 저장하고, FE로는 원문 code만 전달한다(redirect query).
+  3. FE는 즉시 `POST /bo/auth/token-exchange`로 code를 교환한다.
+  4. 서버는 `codeHash + usedAt:null + expiresAt>now` 조건으로 원자적으로 1회 소비 처리 후 access/refresh token을 발급한다.
+- 보안 원칙:
+  - code는 재사용 불가(atomic consume)
+  - code 만료는 매우 짧게 유지(예: 30초)
+  - 실패/만료/재사용 요청은 `401 UNAUTHORIZED`로 처리
+
+## E) Google OAuth 보안
+
+- `state` 검증
+- `email_verified` 검증
+- ID Token `issuer` 검증
+- ID Token `audience(client_id)` 검증
+- 구현 메모:
+  - callback 단계에서 Google token info 검증을 통해 `issuer/audience`를 명시적으로 확인한다.
+  - `audience !== GOOGLE_CLIENT_ID` 또는 비정상 `issuer`는 인증 실패로 처리한다.
+- 필요 시 `hd`/도메인 제한
+- 이메일 비교는 `trim + lowercase` 정규화 후 수행
+
+## F) 초대 플로우
+
+1. 슈퍼어드민 이메일 입력
+2. 이메일 전용 초대 링크 생성(만료 기본 2일)
+3. 사용자 링크 접속 후 Google 로그인
+4. 정규화된 이메일 일치 시 승인
+5. `googleSub` 바인딩
+6. 초대 상태 `used` 처리
+
+보안:
+
+- 토큰 엔트로피 최소 128bit
+- 토큰 원문 저장 금지, `tokenHash`만 저장
+- 1회 사용 후 즉시 폐기
+- 재발급 시 기존 활성 토큰 revoke
+- 초대 검증 API rate limit 적용
+- 만료 정책:
+  - 기본 만료는 2일
+  - 허용 범위: 최소 1시간(3600초) ~ 최대 7일(604800초)
+  - 하드코딩 금지, 운영 설정값으로 변경 가능
+  - 슈퍼어드민은 허용 범위 내에서 초대 생성 시 만료값을 조정할 수 있다.
+  - 허용 범위를 벗어난 요청은 `400`으로 거부한다.
+- 권한 초기값/지정:
+  - 초대 생성 시 기본 권한은 `READ`를 부여
+  - 슈퍼어드민은 초대 생성 시 추가 write 권한(`WRITE_ACTIVITY`, `WRITE_RECRUIT_FORM`, `WRITE_CLUB_INFO`)을 사전 지정할 수 있다.
+
+초대 생성 API 스펙(`POST /bo/admin/invites`):
+
+- body:
+  - `email` (required, 1개)
+  - `perm` (optional, 기본값 `READ`)
+  - `expiresInSec` (optional, 기본값 172800, 허용 범위 3600~604800)
+- 검증:
+  - `perm`에 `READ` 미포함 요청 시 서버에서 `READ`를 강제 포함
+  - 범위 외 `expiresInSec` 요청은 `400`으로 거부
+
+초대 폐기 API 스펙(`PATCH /bo/admin/invites/:id/revoke`):
+
+- 대상이 `pending` 상태일 때만 `revoked`로 전환 가능
+- `pending`이 아닌 초대 폐기 요청은 `409`로 거부
+
+초대 재발급 API 스펙(`POST /bo/admin/invites/:id/reissue`):
+
+- 기존 초대를 기준으로 새 토큰을 재발급한다.
+- 재발급 시 해당 이메일의 기존 `pending` 초대는 모두 `revoked` 처리한다.
+- 본문에서 `perm`/`labels`가 없으면 기존 초대의 `perm`을 승계한다.
+
+동시성:
+
+- `status=pending` 조건에서만 수락 허용
+- 트랜잭션 내부에서 `pending -> used` 전환 후 바인딩
+- 동시 요청은 1건만 성공
+
+충돌 처리:
+
+- `googleSub`가 이미 다른 계정에 바인딩된 경우 `GOOGLE_SUB_CONFLICT` 반환
+
+## G) 슈퍼어드민 정책
+
+- 런타임 판단 기준: DB `isSuperAdmin` 단일 기준
+- 서버 시작 시 `SUPER_ADMIN_EMAIL` bootstrap 보정
+- 운영 중 env 자동 덮어쓰기 금지
+- 최소 1개 이상 비상 super admin 계정 유지(활성 상태)
+- Google OAuth 장애 시 임시 로컬 인증 fallback 경로를 통해 비상 계정만 로그인 허용
+- 로컬 인증 fallback 경로는 상시 개방하지 않고 장애 대응 시에만 운영 플래그로 활성화
+- 예외 전환 규칙: Phase 1 전환 기간에는 기존 로그인 fallback 경로를 임시 활성화로 유지하고, Phase 3 완료 후에는 비상 플래그 기반 fallback만 허용한다.
+- env/DB mismatch:
+  - 기본: 경고 + 운영 알림
+  - strict mode: fail-fast
+
+## H) DB 재검증/권한 검사
+
+라우트 레벨:
+
+- 모든 보호 API 1차 권한 검사 미들웨어 적용
+
+서비스 레벨:
+
+- 민감 작업 2차 DB 재검증
+
+필수 DB 재검증 대상:
+
+- 권한 변경 API
+- 초대 생성/검증/수락 API
+- 계정 활성/비활성 API
+- 모든 write API
+- `/bo/auth/me` (화면 기준 정보 최신화)
+
+성능 기준:
+
+- `userId` 단건 조회 중심
+- write/admin API low QPS 가정
+- 필요 시 Redis 캐시 확장
+- `/bo/auth/me`는 매 요청 DB 재검증을 기본 정책으로 한다.
+- 근거: `/bo/auth/me`는 관리자 화면 권한/상태 렌더링의 기준 엔드포인트이므로 stale 권한 노출 방지를 위해 성능보다 최신 권한 일관성을 우선한다.
+
+## I) Rate Limiting
+
+대상:
+
+- OAuth 시작
+- OAuth callback
+- 초대 검증 전 단계
+- 초대 검증 API
+- refresh API
+
+초기값 및 조정 범위:
+
+| 대상 | 초기값 | 조정 범위 | 기준 |
+| --- | --- | --- | --- |
+| OAuth callback | IP당 10 req/min | 5~20 | 로그인 실패율 모니터링 후 |
+| refresh API | 사용자당 30 req/min | 20~60 | 다중 디바이스 환경 고려 |
+| invite 검증 API | IP당 10 req/min | 5~20 | 초대 남용 시 강화 |
+
+초기값은 백오피스 내부 사용자 규모 기준으로 설정한다. 운영 중 rate limit 초과 알림이 반복되거나 브루트포스 징후 발생 시 하향 조정하고, 정상 사용자 차단 이슈 발생 시 상향 조정한다. 조정 이력은 감사 로그에 준하여 기록한다.
+구현 전제: 분산 환경 일관성을 위해 Redis 기반 rate limiter를 기본으로 사용한다(단일 인스턴스 개발 환경은 in-memory fallback 허용).
+refresh 동시성 제어는 Redis 분산 락을 기본으로 하고, Redis 미연결/미설치 환경에서는 in-memory 락으로 fallback한다.
+
+## J) 감사 로그/모니터링
+
+감사 로그:
+
+- append-only
+- 수정/삭제 API 제공 금지
+- 필요 시 해시 체인/외부 저장 이중 적재 확장
+- retention: 180일
+
+모니터링:
+
+- 권한 변경
+- super admin 이벤트
+- rate limit 반복 초과
+- 로그인 실패 반복
+
+## K) 에러 코드 카탈로그
+
+공통:
+
+- `UNAUTHORIZED` (`401`)
+- `CSRF_BLOCKED` (`401`)
+- `FORBIDDEN` (`403`)
+- `TOO_MANY_REQUESTS` (`429`)
+- `INTERNAL_ERROR` (`500`)
+
+초대/인증:
+
+- `INVITE_EXPIRED` (`410`)
+- `INVITE_ALREADY_USED` (`409`)
+- `INVITE_REVOKED` (`410`)
+- `INVITE_EMAIL_MISMATCH` (`422`)
+- `GOOGLE_SUB_CONFLICT` (`409`)
+- `OAUTH_STATE_INVALID` (`400`)
+- `EMAIL_NOT_VERIFIED` (`403`)
+
+토큰:
+
+- `REFRESH_TOKEN_INVALID` (`401`)
+- `REFRESH_TOKEN_REVOKED` (`401`): 이미 revoke된 토큰 사용(grace window 이내 경쟁 조건 포함)
+- `REFRESH_TOKEN_EXPIRED` (`401`)
+- `REFRESH_TOKEN_REUSE_DETECTED` (`401`): revoke된 토큰의 grace window 초과 재사용(탈취 의심, 전체 토큰 강제 revoke)
+
+권한/계정:
+
+- `ACCOUNT_INACTIVE` (`403`)
+- `PERMISSION_DENIED` (`403`)
+- `SUPER_ADMIN_REQUIRED` (`403`)
+
+## L) 필수 인덱스
+
+`admin_users`:
+
+- `email` unique
+- `googleSub` unique
+
+`admin_invites`:
+
+- `tokenHash` unique
+- `email + status` 복합 인덱스
+- `expiresAt` TTL 인덱스(정책 적용 시)
+
+`admin_audit_logs`:
+
+- `actorUserId`
+- `createdAt`
+- 필요 시 `action + createdAt` 복합 인덱스
+
+`refresh_tokens`:
+
+- `tokenHash` unique
+- `userId + revoked + revokedAt` 복합 인덱스 (grace window 판정 최적화)
+- `expiresAt` TTL 인덱스(정책 적용 시)
+
+## M) 구현 순서 (개발자 기준)
+
+1. [Phase 1] MongoDB 컬렉션/인덱스 생성 (`admin_users`, `admin_invites`, `admin_audit_logs`, `refresh_tokens`)
+2. [Phase 1] Google OAuth 검증 로직 구현(`state`, `email_verified`, `issuer`, `audience`)
+3. [Phase 1] 토큰 발급/검증 로직 구현(access/refresh, rotation, revoke)
+4. [Phase 1] 기존 `passport-local` 및 세션 직렬화/역직렬화 전략 제거
+5. [Phase 1] refresh reuse detection 구현 및 보안 이벤트 연계(배치 근거: rotation/revoke와 분리 불가한 동일 인증 경로)
+6. [Phase 2] 권한 enum/비트마스크 유틸 구현(라벨 <-> 비트 변환 레이어 포함, `write/all` OR 합산/역변환 규칙 포함)
+7. [Phase 2] 초대 생성/검증/수락/재발급/폐기 구현
+8. [Phase 2] `googleSub` 바인딩 충돌 정책 구현(`GOOGLE_SUB_CONFLICT`)
+9. [Phase 2] 라우트 미들웨어 + 서비스 DB 재검증 적용
+10. [Phase 2] `/bo/auth/me` 최신 상태 정책 및 권한 반영 검증
+11. [Phase 2] FE 라우트 가드/`useCan()` 훅/silent refresh 실패 처리 구현(`R) FE 구현 기준` 반영)
+12. [Phase 3] 감사 로그 적재/조회 및 append-only 정책 적용
+13. [Phase 3] rate limiting 및 에러 코드 매핑 적용
+14. [Phase 3] 통합 테스트 및 운영 점검
+
+## N) 트랜잭션 정책 (MongoDB)
+
+아래 시나리오는 반드시 트랜잭션으로 처리한다.
+
+- 초대 수락: `invite(pending->used)` + `googleSub 바인딩` + `admin_users.perm 반영`
+- 권한 변경: `admin_users.perm 변경` + `admin_audit_logs 기록`
+- super-admin 변경: `admin_users.isSuperAdmin 변경` + `admin_audit_logs 기록`
+- 계정 비활성화: `isActive=false` + `refresh_tokens revoke` + `audit 기록`
+- refresh rotation: `old refresh revoke` + `new refresh 발급` (atomic 전환)
+
+트랜잭션 원칙:
+
+- 실패 시 전체 롤백
+- 감사 로그 쓰기 실패도 롤백 조건
+- 동시성 경합 지점은 조건부 갱신(`revoked=false`, `status=pending`)으로 원자성 보장
+- 운영 영향: 감사 로그 저장소 장애 시 권한 변경/계정 상태 변경 API가 일시 중단될 수 있음(보안 무결성 우선 정책)
+- 운영 대응: 장애 알림 즉시 전파, 복구 전까지 읽기 중심 운영 모드 유지, 복구 후 변경 작업 재개
+
+## O) 기존 데이터 마이그레이션 전략
+
+목표:
+
+- 기존 관리자 계정을 신규 인증/권한 체계로 안전하게 전환한다.
+
+적용 시점:
+
+- Phase 1 완료 후, Phase 2 시작 직전 실행
+- 실제 운영 관리자 계정 수는 Phase 1 완료 시점에 확정해 본 섹션에 기록한다.
+- 예상 소요:
+  - 관리자 계정 30개 기준 반나절~1일
+  - 관리자 계정 100개 기준 1~2일(초대 수락 속도에 따라 변동)
+
+기존 계정 처리 원칙:
+
+- `googleSub`가 없는 기존 계정은 초대 플로우 재온보딩을 기본 경로로 사용
+- 운영상 즉시 전환이 필요한 계정은 제한적으로 마이그레이션 스크립트 사용 가능(슈퍼어드민 승인 필수)
+- 비밀번호 로그인 데이터는 신규 인증 기준에서 참조하지 않는다.
+
+실행 절차:
+
+1. 마이그레이션 대상 계정 목록 확정(활성 계정 기준)
+2. 기존 권한 -> 신규 `perm` 매핑 테이블 확정
+3. 계정별 초대 발송 또는 승인된 스크립트 전환 수행
+4. 전환 완료 계정의 `googleSub` 바인딩 및 로그인 검증
+5. 권한 대조 리포트 생성(기존 권한 vs 신규 `perm`)
+
+검증 기준:
+
+- 마이그레이션 전/후 활성 관리자 계정 수 일치
+- 권한 매핑 불일치 0건
+- 전환 대상 계정의 Google 로그인 성공 확인
+
+롤백 기준 및 절차:
+
+- 롤백 임계치:
+  - 권한 매핑 불일치 1건 이상 발생 시 즉시 중단
+  - 전환 대상 계정 로그인 실패율 5% 초과 시 즉시 중단
+- 임계치 초과 시 신규 적용 중단
+- 영향 계정에 대해 기존 운영 경로(임시 fallback)로 즉시 복귀
+- 원인 수정 후 재실행
+
+## P) 테스트 전략
+
+단위 테스트:
+
+- [Phase 1] OAuth 검증: `state` 불일치, `email_verified=false`, `issuer/audience` 실패
+- [Phase 1] 토큰: 발급/검증/만료/revoke/rotation/reuse detection
+- [Phase 2] 권한: `perm` 비트 연산, 복합 마스크 검사, 경계값 검증
+
+통합 테스트:
+
+- [Phase 1] refresh rotation atomic 보장(동시 요청 포함)
+- [Phase 1] 탭 내부 동시 401 상황에서 refresh API 1회만 호출되는지 검증(싱글턴 Promise lock)
+- [Phase 3] 감사 로그 append-only(수정/삭제 거부)
+- [Phase 2] 권한 변경 후 `/bo/auth/me` 최신 상태 반영
+
+E2E 테스트:
+
+- [Phase 2] 초대 생성 -> 링크 접속 -> Google 로그인 -> 권한 부여
+- [Phase 2] 예외 시나리오: 초대 만료/중복 수락/이메일 불일치/`GOOGLE_SUB_CONFLICT`
+
+Safari silent refresh QA(Phase 1 필수):
+
+- 환경:
+  - 스테이징 FE/BE를 운영과 동일한 cross-domain으로 배포해 검증
+  - 브라우저/디바이스: macOS Safari, iOS Safari
+- 시나리오:
+  - [Phase 1] access token 만료 후 자동 refresh 성공 및 원 요청 재시도 성공
+  - [Phase 1] 페이지 새로고침 후 `/auth/refresh` 기반 세션 복구 성공
+  - [Phase 1] Safari cross-site tracking 활성화 상태에서 refresh cookie 전달 여부 확인
+  - [Phase 1] 다중 탭 동시 refresh 시 reuse detection 오탐 여부 확인
+- 판정/조치:
+  - 시나리오 1,2 통과 시 Phase 1 인증 기준 충족
+  - 아래 조건 중 하나라도 충족하면 Safari cross-origin refresh 실패로 판정하고 BFF 패턴 전환 착수:
+    - 시나리오 1 실패(access token 만료 후 자동 refresh 미동작 또는 재시도 API 실패)
+    - 시나리오 2 실패(새로고침 후 세션 복구 실패)
+    - 시나리오 3에서 refresh 요청에 cookie 미첨부 확인
+  - reuse detection 오탐 발생 시 동시 요청 제어(debounce/lock) 적용 후 재검증
+  - grace window(5~10초) 내 재사용은 `REVOKED`로 처리되고, window 초과 재사용만 `REUSE_DETECTED`로 처리되는지 검증
+
+완료 기준:
+
+- [Phase 1] 인증/OAuth/토큰 테스트 통과 후 Phase 2 진입
+- [Phase 2] 권한/초대 E2E 테스트 통과 후 Phase 3 진입
+- [Phase 3] 감사로그/rate limit/에러코드 회귀 테스트 통과 후 릴리스
+
+## Q) 기존 API 권한 매핑 (비트마스크 기준)
+
+라벨-비트 기준:
+
+- `read/all` -> `READ`
+- `write/activity` -> `WRITE_ACTIVITY`
+- `write/recruit-form` -> `WRITE_RECRUIT_FORM`
+- `write/club-info` -> `WRITE_CLUB_INFO`
+- `write/all` -> `WRITE_ACTIVITY | WRITE_RECRUIT_FORM | WRITE_CLUB_INFO`
+
+라우트 매핑:
+
+| API | 필요 권한(라벨) | 비트마스크 조건 |
+| --- | --- | --- |
+| `GET /bo/member` | `read/all` | `(perm & READ) !== 0` |
+| `GET /bo/member/pdf/:filename` | `read/all` | `(perm & READ) !== 0` |
+| `POST /bo/semina` | `write/activity` 또는 `write/all` | `(perm & WRITE_ACTIVITY) !== 0` |
+| `GET /bo/feature/recruit` | `read/all` | `(perm & READ) !== 0` |
+| `PATCH /bo/feature/recruit` | `write/recruit-form` 또는 `write/all` | `(perm & WRITE_RECRUIT_FORM) !== 0` |
+| `GET /bo/feature/club-info` | `read/all` | `(perm & READ) !== 0` (`신규 구현 필요`) |
+| `PATCH /bo/feature/club-info` | `write/club-info` 또는 `write/all` | `(perm & WRITE_CLUB_INFO) !== 0` (`신규 구현 필요`) |
+| `GET /bo/admin/users` | super-admin only | `isSuperAdmin === true` (`신규 구현 필요`) |
+| `POST /bo/admin/invites` | super-admin only | `isSuperAdmin === true` (`신규 구현 필요`) |
+| `PATCH /bo/admin/users/:id/perm` | super-admin only | `isSuperAdmin === true` (`신규 구현 필요`) |
+| `PATCH /bo/admin/users/:id/super-admin` | super-admin only | `isSuperAdmin === true` (`신규 구현 필요`, 감사 로그 필수) |
+| `PATCH /bo/admin/users/:id/active` | super-admin only | `isSuperAdmin === true` (`신규 구현 필요`) |
+
+## R) FE 구현 기준
+
+- 앱 부팅:
+  - 앱 시작 시 `GET /bo/auth/me`를 호출해 사용자/권한 정보를 전역 상태(store)로 초기화한다.
+  - 실패(`401/403`) 시 인증 상태를 비로그인으로 전환하고 로그인 화면으로 라우팅한다.
+- 라우트 가드:
+  - 보호 라우트 진입 전 `isAuthenticated`와 `perm/isSuperAdmin`을 검사한다.
+  - 가드 실패 시 권한 안내 페이지 또는 로그인 페이지로 리다이렉트한다.
+- 권한 기반 UI 제어:
+  - `useCan()` 훅 또는 `Can` 컴포넌트로 버튼/CTA 렌더링을 제어한다.
+  - `write/all` 표시는 C 섹션의 UI 역변환 규칙을 동일하게 사용한다.
+- silent refresh 실패 처리:
+  - `/auth/refresh` 실패 시 access token/사용자 상태를 즉시 초기화한다.
+  - 현재 페이지에서 재시도 루프 없이 로그인 페이지로 단일 리다이렉트한다.
+  - 필요 시 `reason=session_expired` 쿼리로 사용자 안내 문구를 노출한다.
+
+## S) API 응답 포맷 (`GET /bo/auth/me`)
+
+- 응답 원칙:
+  - `perm`(number)을 권한 판정의 기준값으로 사용한다.
+  - `permLabels`는 UI 편의를 위한 파생 필드로 제공한다.
+  - `permLabels`는 서버가 C 섹션의 UI 역변환 규칙(`write/all` 합산 규칙 포함)을 적용해 생성하며, FE는 이를 그대로 표시한다.
+  - `isSuperAdmin`는 super-admin 전용 UI/기능 노출 제어에 사용한다.
+
+응답 예시:
+
+```json
+{
+  "id": "1234567890abcde",
+  "email": "admin@uos.ac.kr",
+  "name": "홍길동",
+  "isSuperAdmin": false,
+  "isActive": true,
+  "perm": 3,
+  "permLabels": ["read/all", "write/activity"]
+}
+```
+
+

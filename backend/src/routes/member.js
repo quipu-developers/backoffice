@@ -1,31 +1,13 @@
 const express = require("express");
-const { Member } = require("../models");
-const { isLoggedIn } = require("../middlewares");
+const { Member } = require("../models/mongo");
 const getData = require("../controllers/getdata");
 const getPDF = require("../controllers/getpdf");
+const { requireAuth, requirePerm } = require("../middlewares/boAuth");
+const { Permission } = require("../config/permissions");
 
 const router = express.Router();
 
-// GET /bo/member
-router.get(
-  "/",
-  (req, res, next) => {
-    console.log(`[LOG] GET /bo/member 요청`);
-    next(); // 다음 미들웨어 또는 컨트롤러로 이동
-  },
-  isLoggedIn,
-  getData(Member)
-);
-
-// GET /bo/member/pdf/{filename}
-router.get(
-  "/pdf/:filename",
-  (req, res, next) => {
-    console.log(`[LOG] GET /bo/member/pdf/${req.params.filename} 요청`);
-    next();
-  },
-  isLoggedIn,
-  getPDF
-);
+router.get("/", requireAuth, requirePerm(Permission.READ), getData(Member));
+router.get("/pdf/:filename", requireAuth, requirePerm(Permission.READ), getPDF);
 
 module.exports = router;

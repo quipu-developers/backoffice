@@ -1,15 +1,11 @@
 const getData = (model) => async (req, res) => {
     try {
-        const data = await model.findAll({
-            attributes: {
-                exclude: ['id']
-            }
-        });
+        const data = await model.find({}).lean();
+        const rows = data.map(({ _id, __v, ...rest }) => rest);
 
-        // 인덱스 추가 (1부터 시작)
-        const indexedData = data.map((item, index) => ({
+        const indexedData = rows.map((item, index) => ({
             index: index + 1,
-            ...item.toJSON()
+            ...item
         }));
 
         res

@@ -75,6 +75,18 @@
   - `lastSeenAt` (선택)
 - `createdAt`, `updatedAt`
 
+## B.5 `auth_codes` (OAuth callback code exchange)
+
+- `codeHash` (unique, required)
+- `userId` (required)
+- `expiresAt` (required, short-lived)
+- `usedAt` (nullable, 1회 교환 후 즉시 마킹)
+- `createdAt`, `updatedAt`
+- 운영 원칙:
+  - 원문 code 저장 금지, `codeHash`만 저장
+  - 매우 짧은 만료(예: 30초) + 1회 사용 원칙
+  - `expiresAt` TTL 인덱스로 자동 정리
+
 ## C) 권한 모델
 
 ```ts
@@ -172,12 +184,30 @@ reuse detection:
   - `Referer`(존재 시)가 `BO_ALLOWED_ORIGINS` allowlist와 일치
   - 위 조건을 모두 만족할 때만 통과, 하나라도 불일치하면 `401` 거부
 
+## D.4 OAuth Callback -> AuthCode -> Token Exchange 플로우
+
+- 목적:
+  - OAuth callback 직후 access/refresh token 원문을 URL query/hash에 직접 노출하지 않기 위함
+  - SPA 라우팅 환경에서 브라우저 히스토리/로그/리퍼러를 통한 토큰 유출 위험 완화
+- 처리 순서:
+  1. `GET /bo/auth/google/callback` 성공 시 서버는 short-lived 1회용 code를 발급한다.
+  2. 서버는 `auth_codes`에 `codeHash`만 저장하고, FE로는 원문 code만 전달한다(redirect query).
+  3. FE는 즉시 `POST /bo/auth/token-exchange`로 code를 교환한다.
+  4. 서버는 `codeHash + usedAt:null + expiresAt>now` 조건으로 원자적으로 1회 소비 처리 후 access/refresh token을 발급한다.
+- 보안 원칙:
+  - code는 재사용 불가(atomic consume)
+  - code 만료는 매우 짧게 유지(예: 30초)
+  - 실패/만료/재사용 요청은 `401 UNAUTHORIZED`로 처리
+
 ## E) Google OAuth 보안
 
 - `state` 검증
 - `email_verified` 검증
 - ID Token `issuer` 검증
 - ID Token `audience(client_id)` 검증
+- 구현 메모:
+  - callback 단계에서 Google token info 검증을 통해 `issuer/audience`를 명시적으로 확인한다.
+  - `audience !== GOOGLE_CLIENT_ID` 또는 비정상 `issuer`는 인증 실패로 처리한다.
 - 필요 시 `hd`/도메인 제한
 - 이메일 비교는 `trim + lowercase` 정규화 후 수행
 
@@ -216,6 +246,17 @@ reuse detection:
 - 검증:
   - `perm`에 `READ` 미포함 요청 시 서버에서 `READ`를 강제 포함
   - 범위 외 `expiresInSec` 요청은 `400`으로 거부
+
+초대 폐기 API 스펙(`PATCH /bo/admin/invites/:id/revoke`):
+
+- 대상이 `pending` 상태일 때만 `revoked`로 전환 가능
+- `pending`이 아닌 초대 폐기 요청은 `409`로 거부
+
+초대 재발급 API 스펙(`POST /bo/admin/invites/:id/reissue`):
+
+- 기존 초대를 기준으로 새 토큰을 재발급한다.
+- 재발급 시 해당 이메일의 기존 `pending` 초대는 모두 `revoked` 처리한다.
+- 본문에서 `perm`/`labels`가 없으면 기존 초대의 `perm`을 승계한다.
 
 동시성:
 
@@ -286,6 +327,7 @@ reuse detection:
 
 초기값은 백오피스 내부 사용자 규모 기준으로 설정한다. 운영 중 rate limit 초과 알림이 반복되거나 브루트포스 징후 발생 시 하향 조정하고, 정상 사용자 차단 이슈 발생 시 상향 조정한다. 조정 이력은 감사 로그에 준하여 기록한다.
 구현 전제: 분산 환경 일관성을 위해 Redis 기반 rate limiter를 기본으로 사용한다(단일 인스턴스 개발 환경은 in-memory fallback 허용).
+refresh 동시성 제어는 Redis 분산 락을 기본으로 하고, Redis 미연결/미설치 환경에서는 in-memory 락으로 fallback한다.
 
 ## J) 감사 로그/모니터링
 
@@ -308,6 +350,7 @@ reuse detection:
 공통:
 
 - `UNAUTHORIZED` (`401`)
+- `CSRF_BLOCKED` (`401`)
 - `FORBIDDEN` (`403`)
 - `TOO_MANY_REQUESTS` (`429`)
 - `INTERNAL_ERROR` (`500`)

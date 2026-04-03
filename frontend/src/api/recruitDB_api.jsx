@@ -1,75 +1,38 @@
-import axios from "axios";
+import http from "../auth/authClient";
 
-const BASE_URL = process.env.REACT_APP_BACKEND_URL;
-
-// 일반부원 데이터 호출 함수
 export const fetchGeneralData = async () => {
-  try {
-    const response = await axios.get(`${BASE_URL}/bo/data/joinquipu_general`, {
-      headers: {
-        accept: "application/json",
-      },
-      withCredentials: true,
-    });
-    return response.data;
-  } catch (err) {
-    console.error("Error fetching general data:", err);
-    throw err;
-  }
+  const response = await http.get("/bo/data/joinquipu_general", {
+    headers: { accept: "application/json" },
+  });
+  return response.data;
 };
 
-// 개발부원 데이터 호출 함수
 export const fetchDevData = async () => {
-  try {
-    const response = await axios.get(`${BASE_URL}/bo/data/joinquipu_dev`, {
-      headers: {
-        accept: "application/json",
-      },
-      withCredentials: true,
-    });
-    return response.data;
-  } catch (err) {
-    console.error("Error fetching dev data:", err);
-
-    throw err;
-  }
+  const response = await http.get("/bo/data/joinquipu_dev", {
+    headers: { accept: "application/json" },
+  });
+  return response.data;
 };
 
-// 부원 데이터 호출 함수 (2025년도 버전)
 export const fetchMemberData = async () => {
-  try {
-    const response = await axios.get(`${BASE_URL}/bo/member`, {
-      headers: {
-        accept: "application/json",
-      },
-      withCredentials: true,
-    });
-    return response.data;
-  } catch (err) {
-    console.error("Error fetching member data:", err);
-
-    throw err;
-  }
+  const response = await http.get("/bo/member", {
+    headers: { accept: "application/json" },
+  });
+  return response.data;
 };
 
 const getPdf = async (filename) => {
   try {
-    const response = await axios.get(`${BASE_URL}/bo/member/pdf/${filename}`, {
-      headers: {
-        accept: "application/json",
-      },
-      responseType: "blob", // 파일 다운로드를 위해 blob 타입으로 받기
-      withCredentials: true, // 쿠키를 전송하기 위해 설정
+    const response = await http.get(`/bo/member/pdf/${filename}`, {
+      headers: { accept: "application/json" },
+      responseType: "blob",
     });
     return response;
   } catch (err) {
     if (err.response && err.response.status === 404) {
-      // 404 에러 처리
       return { status: 404 };
-    } else {
-      console.error("Error fetching PDF:", err);
-      throw err; // 다른 오류가 발생하면 호출한 함수로 전달
     }
+    throw err;
   }
 };
 
@@ -77,11 +40,11 @@ const downloadPdf = (filename, blob) => {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename; // 파일 이름 설정
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  window.URL.revokeObjectURL(url); // 메모리 해제
+  window.URL.revokeObjectURL(url);
 };
 
 export const fetchAndSavePortfolio = async (filename) => {
@@ -92,41 +55,25 @@ export const fetchAndSavePortfolio = async (filename) => {
     } else if (response.status === 404) {
       alert("파일이 존재하지 않습니다.");
     }
-  } catch (error) {
+  } catch (_error) {
     alert("서버 에러");
   }
 };
 
 export const recruitStateCheck = async () => {
-  try {
-    const response = await axios.get(`${BASE_URL}/bo/feature/recruit`, {
-      headers: {
-        accept: "application/json",
-      },
-      withCredentials: true,
-    });
-    return response;
-  } catch (err) {
-    console.error("Error recruitStateCheck:", err);
-    throw err;
-  }
+  const response = await http.get("/bo/feature/recruit", {
+    headers: { accept: "application/json" },
+  });
+  return response;
 };
 
 export const recruitStateChange = async () => {
-  try {
-    const response = await axios.patch(
-      `${BASE_URL}/bo/feature/recruit`,
-      {},
-      {
-        headers: {
-          accept: "application/json",
-        },
-        withCredentials: true,
-      }
-    );
-    return response;
-  } catch (err) {
-    console.error("Error recruitStateChange:", err);
-    throw err;
-  }
+  const response = await http.patch(
+    "/bo/feature/recruit",
+    {},
+    {
+      headers: { accept: "application/json" },
+    }
+  );
+  return response;
 };

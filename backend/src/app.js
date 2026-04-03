@@ -1,162 +1,130 @@
 const express = require("express");
-const app = express();
 const morgan = require("morgan");
 const winston = require("winston");
-
-//보안
 const cookieParser = require("cookie-parser");
 const path = require("path");
-const session = require("express-session");
-const passport = require("passport");
 const helmet = require("helmet");
 const hpp = require("hpp");
 const cors = require("cors");
+const passport = require("passport");
 
 require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
-const NODE_ENV = process.env.NODE_ENV;
-console.log(`NODE_ENV = ${NODE_ENV}`);
-const PORT = process.env.PORT;
 
-const passportConfig = require("../src/passport");
-passportConfig();
+const app = express();
+const NODE_ENV = process.env.NODE_ENV || "development";
+const PORT = process.env.PORT || 4000;
 
-const { sequelize } = require("../src/models");
-const loginRouter = require("../src/routes/login");
-const memberRouter = require("../src/routes/member");
-const seminaRouter = require("../src/routes/semina");
-const featureRouter = require("../src/routes/feature");
+[
+  "COOKIE_SECRET",
+  "ACCESS_TOKEN_SECRET",
+  "BO_BACKEND_URL",
+  "BO_FRONTEND_URL",
+  "BO_ALLOWED_ORIGINS",
+  "MONGO_URI",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "SERVER_SECRET_SALT",
+].forEach((k) => {
+  if (!process.env[k]) throw new Error(`${k} is required`);
+});
 
-const isProdOrTest = NODE_ENV === "production" || NODE_ENV === "test";
+const { connectMongo } = require("./config/mongo");
+const { bootstrapSuperAdmin } = require("./services/superAdminBootstrap");
+const { getRedisMode } = require("./services/redisClient");
+const passportConfig = require("./passport");
 
-const sessionOption = {
-  resave: false,
-  saveUninitialized: false,
-  secret: process.env.COOKIE_SECRET,
-  cookie: {
-    maxAge: 1000 * 60 * 60 * 2, // 2시간
-    httpOnly: isProdOrTest, // production 또는 test이면 true
-    secure: isProdOrTest, // production 또는 test이면 true
-    ...(isProdOrTest && { sameSite: "None" }), // production 또는 test이면 추가
-  },
-  ...(isProdOrTest && { proxy: true }), // production 또는 test이면 추가
-};
+const memberRouter = require("./routes/member");
+const seminaRouter = require("./routes/semina");
+const featureRouter = require("./routes/feature");
+const boAuthRouter = require("./routes/boAuth");
+const boAdminUsersRouter = require("./routes/boAdminUsers");
+const boAdminInvitesRouter = require("./routes/boAdminInvites");
 
-app.use(cookieParser(process.env.COOKIE_SECRET));
-app.use(session(sessionOption));
-app.use(passport.initialize()); // req.user, req.login, req.isAuthenticate, req.logout
-app.use(passport.session()); //connect.sid라는 이름으로 세션 쿠키가 브라우져로 전송
-app.use(express.json());
-
-if (process.env.NODE_ENV === "development") {
-  app.use(
-    cors({
-      origin: process.env.CLIENT_ORIGIN_DEV, // 클라이언트의 Origin
-      methods: ["GET", "POST", "OPTIONS", "DELETE", "PATCH"],
-      credentials: true, // 쿠키를 포함한 요청을 허용}));
-    })
-  );
-  app.use(morgan("dev"));
-  app.use(express.urlencoded({ extended: false }));
-} else {
-  app.use(
-    cors({
-      origin: process.env.CLIENT_ORIGIN, // 클라이언트의 Origin
-      methods: ["GET", "POST", "PATCH", "OPTIONS"],
-      credentials: true, // 쿠키를 포함한 요청을 허용}));
-    })
-  );
-  app.enable("trust proxy");
-  app.use(morgan("combined"));
-  app.use(hpp());
-  app.use(express.urlencoded({ extended: false }));
-  app.use(
-    helmet.contentSecurityPolicy({
-      directives: {
-        defaultSrc: ["'none'"], // 기본적으로 모든 리소스 차단
-        scriptSrc: ["'none'"], // JavaScript 실행 차단 (XSS 방지)
-        styleSrc: ["'none'"], // 외부 스타일 차단
-        frameSrc: ["'none'"], // iframe 포함 금지 (Clickjacking 방어)
-      },
-    })
-  );
-  app.use(helmet.frameguard({ action: "deny" }));
-  app.use(helmet.noSniff());
-  app.use(helmet.dnsPrefetchControl({ allow: false }));
-  app.use(helmet.hidePoweredBy());
-  app.use(helmet.referrerPolicy({ policy: "strict-origin-when-cross-origin" }));
-}
-
-// swagger 관련 세팅
 const swaggerUi = require("swagger-ui-express");
 const swaggerDocument = require("./swagger.json");
 
-async function startServer() {
-  try {
-    // Sequelize 연결
-    await sequelize.authenticate();
-    console.log("[LOG] DB 연결 성공");
+const allowedOrigins = process.env.BO_ALLOWED_ORIGINS.split(",")
+  .map((v) => v.trim())
+  .filter(Boolean);
 
-    // Sequelize 테이블 동기화
-    await sequelize.sync();
-    console.log("[LOG] DB 연결 성공");
+app.use(cookieParser(process.env.COOKIE_SECRET));
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(passport.initialize());
 
-    // 주기적으로 DB 연결 유지
-    setInterval(async () => {
-      try {
-        await sequelize.query("SELECT 1");
-        console.log("[LOG] DB 연결 유지 로직 작동");
-      } catch (err) {
-        console.error("[ERROR] DB 연결 체크/유지 실패: ", err);
-      }
-    }, 3600000);
+app.use(
+  cors({
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    credentials: true,
+  })
+);
 
-    // 서버 실행
-    app.listen(PORT, () => {
-      console.log(`PORT: ${PORT}`);
-      console.log(`swagger: http://localhost:${PORT}/api-docs`);
-      console.log(`server: http://localhost:${PORT}`);
-    });
-  } catch (err) {
-    console.error("DB 연결 실패:", err);
-    process.exit(1);
-  }
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    frameguard: { action: "deny" },
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    noSniff: true,
+  })
+);
+
+if (NODE_ENV === "development") {
+  app.use(morgan("dev"));
+} else {
+  app.enable("trust proxy");
+  app.use(morgan("combined"));
+  app.use(hpp());
 }
 
-startServer();
-
-//login
-app.use("/bo/auth", loginRouter);
-
-//member
+app.use("/bo/auth", boAuthRouter);
+app.use("/bo/admin/users", boAdminUsersRouter);
+app.use("/bo/admin/invites", boAdminInvitesRouter);
 app.use("/bo/member", memberRouter);
-
-//semina
 app.use("/bo/semina", seminaRouter);
-
-//feature
 app.use("/bo/feature", featureRouter);
 
-//{url}/api-docs 개발시에만
-if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
+if (NODE_ENV === "development" || NODE_ENV === "test") {
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 }
 
-//error handler
 const logger = winston.createLogger({
   level: "error",
   format: winston.format.json(),
   transports: [new winston.transports.File({ filename: "error.log" })],
 });
 
-app.use((err, req, res, next) => {
-  if (process.env.NODE_ENV === "development") {
-    console.log("[ERROR] error handler 동작");
+app.use((err, _req, res, _next) => {
+  if (NODE_ENV === "development" || NODE_ENV === "test") {
     console.error(err.stack || err);
   } else {
-    logger.error(err.message || "Unexpected error"); // 운영 환경에서는 로그 파일에 저장
+    logger.error(err.message || "Unexpected error");
   }
 
   res.status(err.status || 500).json({
-    error: { message: "Internal Server Error" },
+    code: "INTERNAL_ERROR",
+    message: "Internal Server Error",
   });
 });
+
+async function startServer() {
+  try {
+    passportConfig();
+
+    await connectMongo();
+    await bootstrapSuperAdmin();
+
+    const rateLimiterMode = getRedisMode();
+    console.log(`[LOG] Rate limiter mode: ${rateLimiterMode}`);
+
+    app.listen(PORT, () => {
+      console.log(`PORT: ${PORT}`);
+      console.log(`server: http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    console.error("Server start failed:", err);
+    process.exit(1);
+  }
+}
+
+startServer();
